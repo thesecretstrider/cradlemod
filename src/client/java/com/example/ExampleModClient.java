@@ -2,13 +2,19 @@ package com.example;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.networking.v1.PacketSender;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.util.Mth;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,6 +30,14 @@ public class ExampleModClient implements ClientModInitializer {
 	private static final Path WELCOME_SEEN_PATH = FabricLoader.getInstance().getConfigDir().resolve("modid-welcome-seen.properties");
 	private static final Properties WELCOME_SEEN = loadWelcomeSeen();
 
+	private static final int FADE_IN_TICKS = 20;
+	private static final int STAY_TICKS = 100;
+	private static final int FADE_OUT_TICKS = 20;
+	private static final int TOTAL_TICKS = FADE_IN_TICKS + STAY_TICKS + FADE_OUT_TICKS;
+
+	private static int welcomeTicksRemaining = 0;
+	private static String welcomeMessage = "";
+
 	@Override
 	public void onInitializeClient() {
 		ClientPlayConnectionEvents.JOIN.register(new ClientPlayConnectionEvents.Join() {
@@ -32,6 +46,67 @@ public class ExampleModClient implements ClientModInitializer {
 				showWelcomeMessageOncePerWorld(client);
 			}
 		});
+
+		HudRenderCallback.EVENT.register(ExampleModClient::renderWelcomeOverlay);
+	}
+
+	private static final float TEXT_SCALE = 4.0f;
+
+	private static void renderWelcomeOverlay(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
+		if (welcomeTicksRemaining <= 0) {
+			return;
+		}
+
+		welcomeTicksRemaining--;
+
+		float alpha;
+		int elapsed = TOTAL_TICKS - welcomeTicksRemaining;
+		if (elapsed < FADE_IN_TICKS) {
+			alpha = (float) elapsed / FADE_IN_TICKS;
+		} else if (welcomeTicksRemaining < FADE_OUT_TICKS) {
+			alpha = (float) welcomeTicksRemaining / FADE_OUT_TICKS;
+		} else {
+			alpha = 1.0f;
+		}
+
+		int alphaInt = Mth.clamp((int) (alpha * 255), 0, 255);
+		if (alphaInt <= 4) {
+			return;
+		}
+
+		Minecraft client = Minecraft.getInstance();
+		Font font = client.font;
+		int screenWidth = client.getWindow().getGuiScaledWidth();
+		int screenHeight = client.getWindow().getGuiScaledHeight();
+
+		// Word wrap width in unscaled font pixels — the screen is divided by scale
+		// to get the coordinate space inside the scaled pose, then we apply padding.
+		int maxTextWidth = (int) (screenWidth / TEXT_SCALE) - 10;
+		Component text = Component.literal(welcomeMessage);
+
+		java.util.List<FormattedCharSequence> lines = font.split(text, maxTextWidth);
+		int lineHeight = font.lineHeight + 2;
+		int totalTextHeight = lines.size() * lineHeight;
+
+		// Compute the Y origin so the block is vertically centred on screen.
+		// We work in screen coordinates, then translate inside the scaled pose.
+		float blockTopY = (screenHeight - totalTextHeight * TEXT_SCALE) / 2.0f;
+
+		int color = 0xFFFFFF | (alphaInt << 24);
+
+		guiGraphics.pose().pushMatrix();
+		guiGraphics.pose().translate(0, blockTopY);
+		guiGraphics.pose().scale(TEXT_SCALE, TEXT_SCALE);
+
+		int y = 0;
+		for (FormattedCharSequence line : lines) {
+			int lineWidth = font.width(line);
+			float x = (screenWidth / TEXT_SCALE - lineWidth) / 2.0f;
+			guiGraphics.drawString(font, line, (int) x, y, color, true);
+			y += lineHeight;
+		}
+
+		guiGraphics.pose().popMatrix();
 	}
 
 	private static void showWelcomeMessageOncePerWorld(Minecraft client) {
@@ -50,8 +125,8 @@ public class ExampleModClient implements ClientModInitializer {
 				WELCOME_SEEN.setProperty(worldKey, "true");
 				saveWelcomeSeen();
 
-				Component welcome = Component.literal(welcomeText());
-				client.gui.setTitle(welcome);
+				welcomeMessage = welcomeText();
+				welcomeTicksRemaining = TOTAL_TICKS;
 			}
 		});
 	}
