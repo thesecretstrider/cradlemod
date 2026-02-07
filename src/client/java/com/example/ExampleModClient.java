@@ -1,63 +1,73 @@
 package com.example;
 
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.PacketSender;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.network.chat.Component;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Properties;
 
 public class ExampleModClient implements ClientModInitializer {
 	private static final String DEFAULT_WELCOME_TEXT = "Welcome sacred artist, you awaken in the world of Cradle";
 	private static final Path WELCOME_TEXT_PATH = Path.of("modid-welcome.txt");
-	private static final int WELCOME_MESSAGE_TICKS = 20 * 10;
-
-	private static int welcomeTicksRemaining = 0;
-	private static String welcomeTextCached = DEFAULT_WELCOME_TEXT;
+	private static final Path WELCOME_SEEN_PATH = FabricLoader.getInstance().getConfigDir().resolve("modid-welcome-seen.properties");
+	private static final Properties WELCOME_SEEN = loadWelcomeSeen();
 
 	@Override
 	public void onInitializeClient() {
 		ClientPlayConnectionEvents.JOIN.register(new ClientPlayConnectionEvents.Join() {
 			@Override
 			public void onPlayReady(ClientPacketListener handler, PacketSender sender, Minecraft client) {
-				startWelcomeMessage(client);
-			}
-		});
-
-		ClientPlayConnectionEvents.DISCONNECT.register(new ClientPlayConnectionEvents.Disconnect() {
-			@Override
-			public void onPlayDisconnect(ClientPacketListener handler, Minecraft client) {
-				welcomeTicksRemaining = 0;
-			}
-		});
-
-		ClientTickEvents.END_CLIENT_TICK.register(new ClientTickEvents.EndTick() {
-			@Override
-			public void onEndTick(Minecraft client) {
-				if (welcomeTicksRemaining <= 0 || client.player == null) {
-					return;
-				}
-
-				client.player.displayClientMessage(Component.literal(welcomeTextCached), true);
-				welcomeTicksRemaining--;
+				showWelcomeMessageOncePerWorld(client);
 			}
 		});
 	}
 
-	private static void startWelcomeMessage(Minecraft client) {
+	private static void showWelcomeMessageOncePerWorld(Minecraft client) {
 		client.execute(new Runnable() {
 			@Override
 			public void run() {
-				welcomeTextCached = welcomeText();
-				welcomeTicksRemaining = WELCOME_MESSAGE_TICKS;
+				String worldKey = worldKey(client);
+				if (worldKey == null) {
+					return;
+				}
+
+				if (WELCOME_SEEN.containsKey(worldKey)) {
+					return;
+				}
+
+				WELCOME_SEEN.setProperty(worldKey, "true");
+				saveWelcomeSeen();
+
+				Component welcome = Component.literal(welcomeText());
+				client.gui.setTitle(welcome);
 			}
 		});
+	}
+
+	private static String worldKey(Minecraft client) {
+		ServerData server = client.getCurrentServer();
+		if (server != null) {
+			return "server:" + server.ip;
+		}
+
+		IntegratedServer integratedServer = client.getSingleplayerServer();
+		if (integratedServer != null) {
+			return "singleplayer:" + integratedServer.getWorldData().getLevelName();
+		}
+
+		return "unknown";
 	}
 
 	private static String welcomeText() {
@@ -73,5 +83,34 @@ public class ExampleModClient implements ClientModInitializer {
 		}
 
 		return DEFAULT_WELCOME_TEXT;
+	}
+
+	private static Properties loadWelcomeSeen() {
+		Properties properties = new Properties();
+		if (!Files.exists(WELCOME_SEEN_PATH)) {
+			return properties;
+		}
+
+		try (InputStream inputStream = Files.newInputStream(WELCOME_SEEN_PATH)) {
+			properties.load(inputStream);
+		} catch (IOException ignored) {
+			// If the file can't be read, treat it as empty.
+		}
+
+		return properties;
+	}
+
+	private static void saveWelcomeSeen() {
+		try {
+			Files.createDirectories(WELCOME_SEEN_PATH.getParent());
+		} catch (IOException ignored) {
+			return;
+		}
+
+		try (OutputStream outputStream = Files.newOutputStream(WELCOME_SEEN_PATH)) {
+			WELCOME_SEEN.store(outputStream, "Cradle mod welcome message state");
+		} catch (IOException ignored) {
+			// Best-effort; if saving fails, the message may show again next join.
+		}
 	}
 }
