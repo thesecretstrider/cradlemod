@@ -1,9 +1,9 @@
 {
 	"required": true,
-	"package": "com.example.mixin.client",
+	"package": "com.cradle.mod.mixin.client",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
-		"ExampleClientMixin"
+		"CradleClientMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

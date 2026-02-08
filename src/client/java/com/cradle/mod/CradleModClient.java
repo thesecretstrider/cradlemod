@@ -1,4 +1,4 @@
-package com.example;
+package com.cradle.mod;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -24,10 +24,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
 
-public class ExampleModClient implements ClientModInitializer {
+public class CradleModClient implements ClientModInitializer {
 	private static final String DEFAULT_WELCOME_TEXT = "Welcome sacred artist, you awaken in the world of Cradle";
-	private static final Path WELCOME_TEXT_PATH = Path.of("modid-welcome.txt");
-	private static final Path WELCOME_SEEN_PATH = FabricLoader.getInstance().getConfigDir().resolve("modid-welcome-seen.properties");
+	private static final Path WELCOME_TEXT_PATH = Path.of("cradlemod-welcome.txt");
+	private static final Path WELCOME_SEEN_PATH = FabricLoader.getInstance().getConfigDir().resolve("cradlemod-welcome-seen.properties");
 	private static final Properties WELCOME_SEEN = loadWelcomeSeen();
 
 	private static final int FADE_IN_TICKS = 20;
@@ -47,7 +47,7 @@ public class ExampleModClient implements ClientModInitializer {
 			}
 		});
 
-		HudRenderCallback.EVENT.register(ExampleModClient::renderWelcomeOverlay);
+		HudRenderCallback.EVENT.register(CradleModClient::renderWelcomeOverlay);
 	}
 
 	private static final float TEXT_SCALE = 4.0f;
@@ -79,8 +79,6 @@ public class ExampleModClient implements ClientModInitializer {
 		int screenWidth = client.getWindow().getGuiScaledWidth();
 		int screenHeight = client.getWindow().getGuiScaledHeight();
 
-		// Word wrap width in unscaled font pixels — the screen is divided by scale
-		// to get the coordinate space inside the scaled pose, then we apply padding.
 		int maxTextWidth = (int) (screenWidth / TEXT_SCALE) - 10;
 		Component text = Component.literal(welcomeMessage);
 
@@ -88,8 +86,6 @@ public class ExampleModClient implements ClientModInitializer {
 		int lineHeight = font.lineHeight + 2;
 		int totalTextHeight = lines.size() * lineHeight;
 
-		// Compute the Y origin so the block is vertically centred on screen.
-		// We work in screen coordinates, then translate inside the scaled pose.
 		float blockTopY = (screenHeight - totalTextHeight * TEXT_SCALE) / 2.0f;
 
 		int color = 0xFFFFFF | (alphaInt << 24);
@@ -127,6 +123,9 @@ public class ExampleModClient implements ClientModInitializer {
 
 				welcomeMessage = welcomeText();
 				welcomeTicksRemaining = TOTAL_TICKS;
+
+				// Also send to chat so the player can read it later
+				client.gui.getChat().addMessage(Component.literal(welcomeMessage));
 			}
 		});
 	}

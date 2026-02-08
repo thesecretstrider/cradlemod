@@ -1,4 +1,4 @@
-package com.example;
+package com.cradle.mod;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -90,4 +90,3 @@ public final class CradlePlayerData {
 		this.hasChosenPath = this.chosenPath != Path.UNSET;
 	}
 }
-

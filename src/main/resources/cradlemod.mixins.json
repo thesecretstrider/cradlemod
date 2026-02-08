@@ -1,9 +1,9 @@
 {
 	"required": true,
-	"package": "com.example.mixin",
+	"package": "com.cradle.mod.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
-		"ExampleMixin"
+		"CradleMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
