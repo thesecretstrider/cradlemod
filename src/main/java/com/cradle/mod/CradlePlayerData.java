@@ -172,6 +172,20 @@ public final class CradlePlayerData {
 		this.activelyCycling = activelyCycling;
 	}
 
+	/**
+	 * Returns the cycling speed multiplier for the current advancement stage.
+	 * Higher stages cycle faster (gain more XP and Madra per tick).
+	 */
+	public float getCyclingSpeedMultiplier() {
+		return switch (advancementStage) {
+			case FOUNDATION -> 1.0f;
+			case COPPER -> 1.5f;
+			case IRON -> 2.0f;
+			case JADE -> 3.0f;
+			case GOLD -> 5.0f;
+		};
+	}
+
 	// ── NBT persistence ────────────────────────────────────────────────
 
 	public CompoundTag toNbt() {

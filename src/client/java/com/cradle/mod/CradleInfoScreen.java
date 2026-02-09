@@ -13,7 +13,7 @@ public class CradleInfoScreen extends Screen {
 
 	// Panel dimensions
 	private static final int PANEL_WIDTH = 220;
-	private static final int PANEL_HEIGHT = 180;
+	private static final int PANEL_HEIGHT = 194;
 
 	// Bar dimensions (for XP and Madra bars inside the panel)
 	private static final int BAR_WIDTH = 180;
@@ -67,6 +67,16 @@ public class CradleInfoScreen extends Screen {
 		// Level
 		graphics.drawString(this.font, "Level:", panelLeft + 10, y, 0xFFAAAAAA);
 		graphics.drawString(this.font, String.valueOf(ClientCradleData.level), panelLeft + 60, y, 0xFFFFFFFF);
+		y += 14;
+
+		// Next breakthrough
+		int nextBreakthrough = ClientCradleData.getNextBreakthroughLevel();
+		graphics.drawString(this.font, "Next:", panelLeft + 10, y, 0xFFAAAAAA);
+		if (nextBreakthrough > 0) {
+			graphics.drawString(this.font, "Level " + nextBreakthrough, panelLeft + 60, y, 0xFFDD99FF);
+		} else {
+			graphics.drawString(this.font, "Max stage reached", panelLeft + 60, y, 0xFFFFD700);
+		}
 		y += 14;
 
 		// Cycling status

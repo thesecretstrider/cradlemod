@@ -53,9 +53,10 @@ public final class CyclingManager {
 			UUID playerId = player.getUUID();
 			CradlePlayerData data = CradlePlayerData.getOrCreate(playerId);
 
-			// Passive Madra regen for everyone
+			// Passive Madra regen for everyone (scales with stage)
 			if (data.getCurrentMadra() < data.getMaxMadra()) {
-				data.setCurrentMadra(data.getCurrentMadra() + PASSIVE_MADRA_PER_TICK);
+				float passiveRate = PASSIVE_MADRA_PER_TICK * data.getCyclingSpeedMultiplier();
+				data.setCurrentMadra(data.getCurrentMadra() + passiveRate);
 			}
 
 			// Active cycling: faster XP + Madra gain, but must stand still
@@ -82,16 +83,19 @@ public final class CyclingManager {
 				// Glowing outline while cycling (refreshed every tick, 40 ticks duration as safety buffer)
 				player.addEffect(new MobEffectInstance(MobEffects.GLOWING, 40, 0, false, false));
 
-				// Add cycling XP
-				data.setCyclingXp(data.getCyclingXp() + ACTIVE_XP_PER_TICK);
+				// Add cycling XP (scales with stage)
+				float multiplier = data.getCyclingSpeedMultiplier();
+				data.setCyclingXp(data.getCyclingXp() + (int) (ACTIVE_XP_PER_TICK * multiplier));
 
-				// Add Madra (faster than passive)
-				data.setCurrentMadra(data.getCurrentMadra() + ACTIVE_MADRA_PER_TICK);
+				// Add Madra (faster than passive, scales with stage)
+				data.setCurrentMadra(data.getCurrentMadra() + ACTIVE_MADRA_PER_TICK * multiplier);
 
 				// Check for level-up
 				int xpNeeded = xpToNextLevel(data.getPlayerLevel());
 				if (data.getCyclingXp() >= xpNeeded) {
 					levelUp(player, data);
+					// Check for stage breakthrough after leveling up
+					BreakthroughManager.checkBreakthrough(player, data);
 				}
 			}
 

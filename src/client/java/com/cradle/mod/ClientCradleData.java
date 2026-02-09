@@ -74,6 +74,19 @@ public final class ClientCradleData {
 	}
 
 	/**
+	 * Returns the level needed for the next breakthrough, or -1 if at max stage (Gold).
+	 */
+	public static int getNextBreakthroughLevel() {
+		return switch (stage) {
+			case "FOUNDATION" -> 10;
+			case "COPPER" -> 25;
+			case "IRON" -> 50;
+			case "JADE" -> 100;
+			default -> -1; // GOLD or unknown = max stage
+		};
+	}
+
+	/**
 	 * Returns a human-readable display name for the current path.
 	 */
 	public static String getPathDisplayName() {
