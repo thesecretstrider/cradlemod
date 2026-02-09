@@ -3,7 +3,8 @@
 	"package": "com.cradle.mod.mixin.client",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
-		"CradleClientMixin"
+		"CradleClientMixin",
+		"MadraBarMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
