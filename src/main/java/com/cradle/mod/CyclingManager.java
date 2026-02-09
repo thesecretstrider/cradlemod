@@ -31,11 +31,11 @@ public final class CyclingManager {
 	private static final int ACTIVE_XP_PER_TICK = 1;
 	private static final float ACTIVE_MADRA_PER_TICK = 0.1f;
 
-	// Base XP needed to level up. Each level requires more.
-	private static final int BASE_XP_TO_LEVEL = 1000;
+	// Base XP needed to level up. Flat — every level costs the same.
+	private static final int BASE_XP_TO_LEVEL = 200;
 
-	// How much extra XP each level costs (multiplier per level)
-	private static final float XP_SCALING_PER_LEVEL = 1.2f;
+	// Scaling multiplier per level (1.0 = flat, no exponential growth)
+	private static final float XP_SCALING_PER_LEVEL = 1.0f;
 
 	// How much maxMadra increases per level
 	private static final float MADRA_PER_LEVEL = 10.0f;
