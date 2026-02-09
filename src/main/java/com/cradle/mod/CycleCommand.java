@@ -13,8 +13,8 @@ import net.minecraft.server.permissions.Permissions;
 
 /**
  * Registers the /cycle command with subcommands:
- *   /cycle start       - begin active cycling (sit down, must stay still)
- *   /cycle stop        - stop active cycling (stand up)
+ *   /cycle start       - begin active cycling (must stay still, glowing outline)
+ *   /cycle stop        - stop active cycling
  *   /cycle info        - open the Sacred Artist Status GUI screen
  *   /cycle setlevel    - debug: set player level
  *   /cycle setstage    - debug: set advancement stage
@@ -38,7 +38,7 @@ public final class CycleCommand {
 
 					CyclingManager.startCycling(player, data);
 					ctx.getSource().sendSuccess(
-							() -> Component.literal("§6[Cradle] §fYou sit down and begin cycling. Madra flows through you..."),
+							() -> Component.literal("§6[Cradle] §fYou begin cycling. Madra flows through you..."),
 							false
 					);
 					return 1;
@@ -56,7 +56,7 @@ public final class CycleCommand {
 
 					CyclingManager.stopCycling(player, data);
 					ctx.getSource().sendSuccess(
-							() -> Component.literal("§6[Cradle] §fYou stand up and stop cycling."),
+							() -> Component.literal("§6[Cradle] §fYou stop cycling."),
 							false
 					);
 					return 1;

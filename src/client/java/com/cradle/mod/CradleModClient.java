@@ -2,6 +2,7 @@ package com.cradle.mod;
 
 import com.cradle.mod.network.CradleSyncPayload;
 import com.cradle.mod.network.OpenInfoScreenPayload;
+import com.cradle.mod.network.OpenPathSelectionPayload;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -85,11 +86,21 @@ public class CradleModClient implements ClientModInitializer {
 				}
 		);
 
-		// ── Keybind: J to open info screen ───────────────────────────
+		// ── Networking: receive open-path-selection packet ───────────
+		ClientPlayNetworking.registerGlobalReceiver(OpenPathSelectionPayload.TYPE,
+				(payload, context) -> {
+					context.client().execute(() -> {
+						context.client().setScreen(new PathSelectionScreen());
+					});
+				}
+		);
+
+		// ── Keybind + Cycling Particles ──────────────────────────────
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (INFO_KEYBIND.consumeClick()) {
 				client.setScreen(new CradleInfoScreen());
 			}
+			CyclingParticleRenderer.tick(client);
 		});
 	}
 

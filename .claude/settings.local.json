@@ -128,7 +128,26 @@
       "Bash(cmd /c \"gradlew.bat build\")",
       "Bash(powershell -File - <<'PSEOF'\nAdd-Type -AssemblyName System.IO.Compression.FileSystem\n$jar = Get-ChildItem 'C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-common\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\' -Filter '*.jar' | Select-Object -First 1\n$zip = [System.IO.Compression.ZipFile]::OpenRead\\($jar.FullName\\)\n$zip.Entries | Where-Object { $_.FullName -match 'ResourceLocation' -or $_.FullName -match '/Identifier\\\\.' } | ForEach-Object { Write-Host $_.FullName }\n$zip.Dispose\\(\\)\nPSEOF)",
       "Bash(powershell -File - <<'PSEOF'\nSet-Location 'C:\\\\Users\\\\aaron\\\\Documents\\\\cradlemod'\n& .\\\\gradlew.bat build 2>&1\nPSEOF)",
-      "Bash(powershell -File - <<'PSEOF'\nAdd-Type -AssemblyName System.IO.Compression.FileSystem\n$jar = Get-ChildItem 'C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-clientonly\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\' -Filter '*.jar' | Select-Object -First 1\n$zip = [System.IO.Compression.ZipFile]::OpenRead\\($jar.FullName\\)\n$zip.Entries | Where-Object { $_.FullName -match 'ExperienceBarRenderer' -or $_.FullName -match 'ContextualBarRenderer' } | ForEach-Object { Write-Host $_.FullName }\n$zip.Dispose\\(\\)\nPSEOF)"
+      "Bash(powershell -File - <<'PSEOF'\nAdd-Type -AssemblyName System.IO.Compression.FileSystem\n$jar = Get-ChildItem 'C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-clientonly\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\' -Filter '*.jar' | Select-Object -First 1\n$zip = [System.IO.Compression.ZipFile]::OpenRead\\($jar.FullName\\)\n$zip.Entries | Where-Object { $_.FullName -match 'ExperienceBarRenderer' -or $_.FullName -match 'ContextualBarRenderer' } | ForEach-Object { Write-Host $_.FullName }\n$zip.Dispose\\(\\)\nPSEOF)",
+      "Bash(powershell -File - <<'PSEOF'\nAdd-Type -AssemblyName System.IO.Compression.FileSystem\n$jar = Get-ChildItem 'C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-clientonly\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\' -Filter '*.jar' | Select-Object -First 1\n$zip = [System.IO.Compression.ZipFile]::OpenRead\\($jar.FullName\\)\n$zip.Entries | Where-Object { $_.FullName -match 'ParticleEngine' -and $_.FullName -notmatch '\\\\ } | ForEach-Object { Write-Host $_.FullName }\n$zip.Dispose\\(\\)\nPSEOF)",
+      "Bash(powershell -File -:*)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -public -)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -public /tmp/MobEffects.class)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -public /tmp/Entity.class)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -public /tmp/LivingEntity.class)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -public /tmp/MobEffectInstance.class)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -public /tmp/EntityRenderer.class)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -public /tmp/Team.class)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -private /tmp/Entity.class)",
+      "Bash(jar -xf:*)",
+      "Bash(where:*)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -classpath \"C:\\\\tmp\\\\mc-extract\" -public net.minecraft.world.entity.Entity)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -classpath \"C:\\\\tmp\\\\mc-extract\" -private -verbose net.minecraft.world.entity.Entity)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -classpath \"C:\\\\tmp\\\\mc-extract\" -public net.minecraft.world.effect.MobEffects)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -classpath \"C:\\\\tmp\\\\mc-extract\" -public net.minecraft.world.effect.MobEffectInstance)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -classpath \"C:\\\\tmp\\\\mc-extract\" -public net.minecraft.world.scores.Team)",
+      "Bash(.gradlew.bat build:*)",
+      "Bash(dir /s /b \"C:\\\\Users\\\\aaron\\\\Documents\\\\cradlemod\\\\src\\\\client\\\\java\\\\com\\\\cradle\\\\mod\\\\*.java\")"
     ]
   }
 }

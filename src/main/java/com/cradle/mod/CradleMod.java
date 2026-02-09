@@ -1,7 +1,9 @@
 package com.cradle.mod;
 
+import com.cradle.mod.network.ChoosePathPayload;
 import com.cradle.mod.network.CradleSyncPayload;
 import com.cradle.mod.network.OpenInfoScreenPayload;
+import com.cradle.mod.network.OpenPathSelectionPayload;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -12,6 +14,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.LevelResource;
 
@@ -35,12 +38,54 @@ public class CradleMod implements ModInitializer {
 		// Register networking packets (server -> client)
 		PayloadTypeRegistry.playS2C().register(CradleSyncPayload.TYPE, CradleSyncPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playS2C().register(OpenInfoScreenPayload.TYPE, OpenInfoScreenPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playS2C().register(OpenPathSelectionPayload.TYPE, OpenPathSelectionPayload.STREAM_CODEC);
 
-		// Send initial data sync when a player joins
+		// Register networking packets (client -> server)
+		PayloadTypeRegistry.playC2S().register(ChoosePathPayload.TYPE, ChoosePathPayload.STREAM_CODEC);
+
+		// Send initial data sync when a player joins, and open path selection if needed
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			ServerPlayer player = handler.getPlayer();
 			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
 			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(data));
+
+			// If the player hasn't chosen a path yet, open the selection screen
+			if (!data.hasChosenPath()) {
+				ServerPlayNetworking.send(player, new OpenPathSelectionPayload());
+			}
+		});
+
+		// Handle path selection from the client
+		ServerPlayNetworking.registerGlobalReceiver(ChoosePathPayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+
+			// Validate: player hasn't already chosen
+			if (data.hasChosenPath()) {
+				return;
+			}
+
+			// Validate: path name is a real Path enum value and not UNSET
+			CradlePlayerData.Path path;
+			try {
+				path = CradlePlayerData.Path.valueOf(payload.pathName());
+			} catch (IllegalArgumentException e) {
+				return; // Invalid path name — ignore
+			}
+			if (path == CradlePlayerData.Path.UNSET) {
+				return;
+			}
+
+			// Set the path
+			data.setChosenPath(path);
+
+			// Sync updated data to client
+			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(data));
+
+			// Send confirmation chat message
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A7fYou have chosen the \u00A7e" + path.displayName() + "\u00A7f!"
+			));
 		});
 
 		// Load player data when the server starts

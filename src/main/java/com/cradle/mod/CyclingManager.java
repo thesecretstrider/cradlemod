@@ -5,7 +5,8 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Pose;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -17,7 +18,7 @@ import java.util.UUID;
  * Passive Madra regen happens for everyone regardless.
  *
  * While actively cycling, the player must stand still (movement stops cycling)
- * and enters a sitting/meditation pose.
+ * and gets a glowing outline colored by their Path.
  */
 public final class CyclingManager {
 
@@ -78,8 +79,8 @@ public final class CyclingManager {
 				// Prevent sprinting while cycling
 				player.setSprinting(false);
 
-				// Meditation pose (sitting)
-				player.setPose(Pose.SITTING);
+				// Glowing outline while cycling (refreshed every tick, 40 ticks duration as safety buffer)
+				player.addEffect(new MobEffectInstance(MobEffects.GLOWING, 40, 0, false, false));
 
 				// Add cycling XP
 				data.setCyclingXp(data.getCyclingXp() + ACTIVE_XP_PER_TICK);
@@ -108,7 +109,6 @@ public final class CyclingManager {
 	public static void startCycling(ServerPlayer player, CradlePlayerData data) {
 		data.setActivelyCycling(true);
 		CYCLING_POSITIONS.put(player.getUUID(), new double[]{player.getX(), player.getZ()});
-		player.setPose(Pose.SITTING);
 	}
 
 	/**
@@ -118,7 +118,7 @@ public final class CyclingManager {
 	public static void stopCycling(ServerPlayer player, CradlePlayerData data) {
 		data.setActivelyCycling(false);
 		CYCLING_POSITIONS.remove(player.getUUID());
-		player.setPose(Pose.STANDING);
+		player.removeEffect(MobEffects.GLOWING);
 	}
 
 	// ── Level-up logic ─────────────────────────────────────────────────

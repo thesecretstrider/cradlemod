@@ -59,6 +59,21 @@ public final class ClientCradleData {
 	}
 
 	/**
+	 * Returns the ARGB color for the current path.
+	 * Used by cycling particles (path-based, not stage-based).
+	 */
+	public static int getPathParticleColor() {
+		return switch (path) {
+			case "BLACK_FLAME" -> 0xFF8B0000;      // dark red embers
+			case "ENDLESS_SWORD" -> 0xFFCCCCCC;    // silver/white
+			case "STELLAR_SPEAR" -> 0xFFFFDD44;    // bright gold
+			case "CLOUD_HAMMER" -> 0xFF444455;      // dark grey/storm
+			case "HOLLOW_KING" -> 0xFFDDDDEE;       // pale white
+			default -> 0xFFC0C0C0;                  // light grey (unset)
+		};
+	}
+
+	/**
 	 * Returns a human-readable display name for the current path.
 	 */
 	public static String getPathDisplayName() {
