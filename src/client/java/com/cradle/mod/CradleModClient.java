@@ -67,6 +67,11 @@ public class CradleModClient implements ClientModInitializer {
 			}
 		});
 
+		// ── Reset client data when disconnecting ─────────────────────
+		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+			ClientCradleData.reset();
+		});
+
 		HudRenderCallback.EVENT.register(CradleModClient::renderWelcomeOverlay);
 
 		// ── Networking: receive sync packet ───────────────────────────
@@ -181,9 +186,6 @@ public class CradleModClient implements ClientModInitializer {
 
 				welcomeMessage = welcomeText();
 				welcomeTicksRemaining = TOTAL_TICKS;
-
-				// Also send to chat so the player can read it later
-				client.gui.getChat().addMessage(Component.literal(welcomeMessage));
 			}
 		});
 	}

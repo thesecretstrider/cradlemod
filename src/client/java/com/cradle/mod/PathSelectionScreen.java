@@ -36,11 +36,11 @@ public class PathSelectionScreen extends Screen {
 	};
 
 	private static final String[] DESCRIPTIONS = {
-			"Destructive fire and overwhelming force. Burn everything in your path.",
-			"Precise blade techniques and cutting intent. A thousand swords at your command.",
-			"Blinding light and piercing strikes. Strike true like a beam of starlight.",
-			"Raw power and unbreakable defense. Crush your enemies like thunder.",
-			"Pure madra manipulation and control. Master the essence of power itself."
+			"Destructive fire and overwhelming force. Burn everything.",
+			"Precise blades and cutting intent. A thousand swords.",
+			"Blinding light and piercing strikes. Strike like starlight.",
+			"Raw power and unbreakable defense. Crush like thunder.",
+			"Pure madra manipulation. Master the essence of power."
 	};
 
 	private static final int[] PATH_COLORS = {
@@ -53,9 +53,9 @@ public class PathSelectionScreen extends Screen {
 
 	// ── Layout constants ──────────────────────────────────────────────
 
-	private static final int CARD_WIDTH = 160;
-	private static final int CARD_HEIGHT = 80;
-	private static final int GAP = 10;
+	private static final int CARD_WIDTH = 140;
+	private static final int CARD_HEIGHT = 64;
+	private static final int GAP = 6;
 
 	// ── State ─────────────────────────────────────────────────────────
 
@@ -87,18 +87,26 @@ public class PathSelectionScreen extends Screen {
 		renderTransparentBackground(graphics);
 
 		int centerX = this.width / 2;
+		int centerY = this.height / 2;
+
+		// Calculate total grid height to center everything vertically
+		// Title (10px) + gap (4) + subtitle (10px) + gap (8) + 2 rows of cards + gap between rows
+		int gridHeight = CARD_HEIGHT + GAP + CARD_HEIGHT; // two rows
+		int titleHeight = 28; // title + subtitle + spacing
+		int totalHeight = titleHeight + gridHeight;
+		int startY = centerY - totalHeight / 2;
 
 		// Title
-		graphics.drawCenteredString(this.font, "Choose Your Path", centerX, 20, 0xFFFFD700);
+		graphics.drawCenteredString(this.font, "Choose Your Path", centerX, startY, 0xFFFFD700);
 		graphics.drawCenteredString(this.font, "Select a sacred arts discipline to begin your journey",
-				centerX, 34, 0xFFAAAAAA);
+				centerX, startY + 14, 0xFFAAAAAA);
 
 		// ── Calculate card positions (3-2 grid) ──────────────────────
 
 		// Top row: 3 cards centered
 		int topRowWidth = 3 * CARD_WIDTH + 2 * GAP;
 		int topRowLeft = centerX - topRowWidth / 2;
-		int topRowY = 55;
+		int topRowY = startY + titleHeight;
 
 		for (int i = 0; i < 3; i++) {
 			cardX[i] = topRowLeft + i * (CARD_WIDTH + GAP);
@@ -155,19 +163,23 @@ public class PathSelectionScreen extends Screen {
 
 		// Path name (centered, colored)
 		int textCenterX = x + CARD_WIDTH / 2;
-		graphics.drawCenteredString(this.font, DISPLAY_NAMES[index], textCenterX, y + 8, color);
+		graphics.drawCenteredString(this.font, DISPLAY_NAMES[index], textCenterX, y + 5, color);
 
 		// Divider line
-		int divY = y + 22;
+		int divY = y + 18;
 		graphics.fill(x + 10, divY, x + CARD_WIDTH - 10, divY + 1, 0x44FFFFFF);
 
-		// Description — word-wrapped
-		int descY = divY + 6;
+		// Description — word-wrapped, clipped to card bounds
+		int descY = divY + 4;
 		int maxDescWidth = CARD_WIDTH - 16;
+		int cardBottom = y + CARD_HEIGHT - 4; // leave 4px padding at bottom
 		Component descText = Component.literal(DESCRIPTIONS[index]);
 		List<FormattedCharSequence> lines = this.font.split(descText, maxDescWidth);
 
 		for (FormattedCharSequence line : lines) {
+			if (descY + this.font.lineHeight > cardBottom) {
+				break; // Don't draw lines that would overflow the card
+			}
 			int lineWidth = this.font.width(line);
 			float lineX = x + (CARD_WIDTH - lineWidth) / 2.0f;
 			graphics.drawString(this.font, line, (int) lineX, descY, 0xFFBBBBBB);

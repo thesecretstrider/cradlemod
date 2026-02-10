@@ -72,7 +72,7 @@ public final class CyclingManager {
 								"§6[Cradle] §fYou moved and stopped cycling."
 						));
 						// Still send sync this tick so client sees the change
-						ServerPlayNetworking.send(player, createSyncPayload(data));
+						ServerPlayNetworking.send(player, createSyncPayload(player, data));
 						continue;
 					}
 				}
@@ -90,17 +90,28 @@ public final class CyclingManager {
 				// Add Madra (faster than passive, scales with stage)
 				data.setCurrentMadra(data.getCurrentMadra() + ACTIVE_MADRA_PER_TICK * multiplier);
 
-				// Check for level-up
-				int xpNeeded = xpToNextLevel(data.getPlayerLevel());
-				if (data.getCyclingXp() >= xpNeeded) {
-					levelUp(player, data);
-					// Check for stage breakthrough after leveling up
-					BreakthroughManager.checkBreakthrough(player, data);
+				// Check for level-up (capped at next breakthrough level)
+				int nextBreakthroughLevel = BreakthroughManager.getNextBreakthroughLevel(data.getAdvancementStage());
+				boolean atCap = nextBreakthroughLevel > 0 && data.getPlayerLevel() >= nextBreakthroughLevel;
+
+				if (!atCap) {
+					int xpNeeded = xpToNextLevel(data.getPlayerLevel());
+					if (data.getCyclingXp() >= xpNeeded) {
+						levelUp(player, data);
+						// Check for stage breakthrough after leveling up
+						BreakthroughManager.checkBreakthrough(player, data);
+					}
+				} else {
+					// Cap XP at the max so the bar shows full
+					int xpNeeded = xpToNextLevel(data.getPlayerLevel());
+					if (data.getCyclingXp() > xpNeeded) {
+						data.setCyclingXp(xpNeeded);
+					}
 				}
 			}
 
 			// Send sync packet to client every tick (packet is tiny, ~30 bytes)
-			ServerPlayNetworking.send(player, createSyncPayload(data));
+			ServerPlayNetworking.send(player, createSyncPayload(player, data));
 		}
 	}
 
@@ -155,8 +166,9 @@ public final class CyclingManager {
 
 	/**
 	 * Creates a sync packet from the current player data.
+	 * Requires the ServerPlayer to check if they can advance (inventory check).
 	 */
-	public static CradleSyncPayload createSyncPayload(CradlePlayerData data) {
+	public static CradleSyncPayload createSyncPayload(ServerPlayer player, CradlePlayerData data) {
 		return new CradleSyncPayload(
 				data.getPlayerLevel(),
 				data.getCyclingXp(),
@@ -165,7 +177,8 @@ public final class CyclingManager {
 				data.getAdvancementStage().name(),
 				data.getCurrentMadra(),
 				data.getMaxMadra(),
-				data.isActivelyCycling()
+				data.isActivelyCycling(),
+				BreakthroughManager.canAdvance(player, data)
 		);
 	}
 }

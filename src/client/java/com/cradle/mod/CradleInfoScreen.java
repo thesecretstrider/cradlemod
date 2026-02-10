@@ -1,23 +1,38 @@
 package com.cradle.mod;
 
+import com.cradle.mod.network.AttemptAdvancePayload;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /**
  * GUI screen showing the player's Sacred Artist status.
  * Opened via /cycle info or the J keybind.
  * Press Escape to close.
+ *
+ * When the player meets all requirements to advance to the next stage,
+ * an "Advance" button appears at the bottom. Clicking it sends a
+ * request to the server to perform the breakthrough.
  */
 public class CradleInfoScreen extends Screen {
 
 	// Panel dimensions
 	private static final int PANEL_WIDTH = 220;
-	private static final int PANEL_HEIGHT = 194;
+	private static final int PANEL_HEIGHT = 220;
 
 	// Bar dimensions (for XP and Madra bars inside the panel)
 	private static final int BAR_WIDTH = 180;
 	private static final int BAR_HEIGHT = 8;
+
+	// Advance button dimensions
+	private static final int BUTTON_WIDTH = 120;
+	private static final int BUTTON_HEIGHT = 20;
+
+	// Button position (calculated during render)
+	private int advBtnX, advBtnY;
+	private boolean advBtnHovered = false;
 
 	public CradleInfoScreen() {
 		super(Component.literal("Sacred Artist Status"));
@@ -125,9 +140,47 @@ public class CradleInfoScreen extends Screen {
 		if (madraFillWidth > 0) {
 			graphics.fill(barLeft, y, barLeft + madraFillWidth, y + BAR_HEIGHT, stageColor);
 		}
+		y += BAR_HEIGHT + 10;
+
+		// ── Advance button (only shown when player can advance) ──────────
+		if (ClientCradleData.canAdvance) {
+			advBtnX = centerX - BUTTON_WIDTH / 2;
+			advBtnY = y;
+
+			// Check hover
+			advBtnHovered = mouseX >= advBtnX && mouseX <= advBtnX + BUTTON_WIDTH
+					&& mouseY >= advBtnY && mouseY <= advBtnY + BUTTON_HEIGHT;
+
+			// Button border (gold)
+			graphics.fill(advBtnX - 1, advBtnY - 1, advBtnX + BUTTON_WIDTH + 1, advBtnY + BUTTON_HEIGHT + 1, 0xFFFFD700);
+
+			// Button background (brighter on hover)
+			int btnBg = advBtnHovered ? 0xFF3A2A1E : 0xFF2A1A0E;
+			graphics.fill(advBtnX, advBtnY, advBtnX + BUTTON_WIDTH, advBtnY + BUTTON_HEIGHT, btnBg);
+
+			// Button text
+			int textColor = advBtnHovered ? 0xFFFFFF55 : 0xFFFFD700;
+			graphics.drawCenteredString(this.font, "\u2B06 Advance \u2B06", centerX, advBtnY + 6, textColor);
+		} else {
+			advBtnHovered = false;
+		}
 
 		// Hint at the bottom
 		graphics.drawCenteredString(this.font, "Press ESC to close | J to toggle",
 				centerX, panelTop + PANEL_HEIGHT - 12, 0x66FFFFFF);
+	}
+
+	// ── Click handling ────────────────────────────────────────────────
+
+	@Override
+	public boolean mouseClicked(MouseButtonEvent event, boolean bl) {
+		if (event.button() == 0 && ClientCradleData.canAdvance && advBtnHovered) {
+			// Send advancement request to server
+			ClientPlayNetworking.send(new AttemptAdvancePayload());
+			// Close the screen so the player sees the breakthrough messages in chat
+			this.onClose();
+			return true;
+		}
+		return super.mouseClicked(event, bl);
 	}
 }

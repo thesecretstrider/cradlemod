@@ -18,6 +18,23 @@ public final class ClientCradleData {
 	public static float currentMadra = 0f;
 	public static float maxMadra = 100f;
 	public static boolean cycling = false;
+	public static boolean canAdvance = false;
+
+	/**
+	 * Reset all client data to defaults. Called when disconnecting from a world
+	 * so that stale data doesn't carry over to the next world.
+	 */
+	public static void reset() {
+		level = 0;
+		cyclingXp = 0;
+		xpToNext = 1000;
+		path = "UNSET";
+		stage = "FOUNDATION";
+		currentMadra = 0f;
+		maxMadra = 100f;
+		cycling = false;
+		canAdvance = false;
+	}
 
 	public static void update(CradleSyncPayload payload) {
 		level = payload.level();
@@ -28,6 +45,7 @@ public final class ClientCradleData {
 		currentMadra = payload.currentMadra();
 		maxMadra = payload.maxMadra();
 		cycling = payload.cycling();
+		canAdvance = payload.canAdvance();
 	}
 
 	/**

@@ -1,16 +1,20 @@
 package com.cradle.mod;
 
+import com.cradle.mod.item.CradleItems;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * Handles advancement stage breakthroughs. When a player reaches the
- * required level, they automatically break through to the next stage.
+ * required level AND has the required items, they break through to the next stage.
  *
- * Called after every level-up to check if the player qualifies.
- *
- * TODO (Phase 11): Add item requirements for Iron->Jade and Jade->Gold
- * when custom items are built.
+ * Item requirements:
+ *   Foundation -> Copper: 5 Vital Fruits
+ *   Copper -> Iron:       5 Spirit Fruits
+ *   Iron -> Jade:         1 Spirit Stone (from dungeon chests)
+ *   Jade -> Gold:         Level only (placeholder for Remnant mob later)
  */
 public final class BreakthroughManager {
 
@@ -30,6 +34,44 @@ public final class BreakthroughManager {
 	}
 
 	/**
+	 * Returns the item required to advance TO the given stage, or null if none needed.
+	 */
+	public static Item getRequiredItem(CradlePlayerData.AdvancementStage stage) {
+		return switch (stage) {
+			case COPPER -> CradleItems.VITAL_FRUIT;
+			case IRON -> CradleItems.SPIRIT_FRUIT;
+			case JADE -> CradleItems.SPIRIT_STONE;
+			case GOLD -> null; // Placeholder for Remnant mob drop later
+			default -> null;
+		};
+	}
+
+	/**
+	 * Returns how many of the required item are needed to advance TO the given stage.
+	 */
+	public static int getRequiredItemCount(CradlePlayerData.AdvancementStage stage) {
+		return switch (stage) {
+			case COPPER -> 5;  // 5 Vital Fruits
+			case IRON -> 5;    // 5 Spirit Fruits
+			case JADE -> 1;    // 1 Spirit Stone
+			case GOLD -> 0;    // No item (placeholder)
+			default -> 0;
+		};
+	}
+
+	/**
+	 * Returns the display name for the required item (for chat messages).
+	 */
+	public static String getRequiredItemName(CradlePlayerData.AdvancementStage stage) {
+		return switch (stage) {
+			case COPPER -> "Vital Fruit";
+			case IRON -> "Spirit Fruit";
+			case JADE -> "Spirit Stone";
+			default -> "";
+		};
+	}
+
+	/**
 	 * Returns the maxMadra boost granted when reaching the given stage.
 	 */
 	public static float getMaxMadraBoost(CradlePlayerData.AdvancementStage stage) {
@@ -43,8 +85,40 @@ public final class BreakthroughManager {
 	}
 
 	/**
+	 * Counts how many of the given item the player has in their inventory.
+	 */
+	private static int countItemInInventory(ServerPlayer player, Item item) {
+		int count = 0;
+		for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+			ItemStack stack = player.getInventory().getItem(i);
+			if (stack.is(item)) {
+				count += stack.getCount();
+			}
+		}
+		return count;
+	}
+
+	/**
+	 * Removes a specific count of the given item from the player's inventory.
+	 * Assumes the player has enough (check with countItemInInventory first).
+	 */
+	private static void removeItemFromInventory(ServerPlayer player, Item item, int amount) {
+		int remaining = amount;
+		for (int i = 0; i < player.getInventory().getContainerSize() && remaining > 0; i++) {
+			ItemStack stack = player.getInventory().getItem(i);
+			if (stack.is(item)) {
+				int toRemove = Math.min(remaining, stack.getCount());
+				stack.shrink(toRemove);
+				remaining -= toRemove;
+			}
+		}
+	}
+
+	/**
 	 * Check if the player qualifies for a breakthrough after leveling up.
-	 * If they do, advance their stage, boost maxMadra, and purify their Madra.
+	 * Only NOTIFIES the player when they reach the required level — does NOT
+	 * auto-advance. The player must use the "Advance" button (Phase 9D) to
+	 * actually break through.
 	 */
 	public static void checkBreakthrough(ServerPlayer player, CradlePlayerData data) {
 		CradlePlayerData.AdvancementStage currentStage = data.getAdvancementStage();
@@ -56,8 +130,78 @@ public final class BreakthroughManager {
 		CradlePlayerData.AdvancementStage nextStage = currentStage.next();
 		int requiredLevel = getLevelForStage(nextStage);
 
+		// Only notify once when they first reach the required level
+		if (data.getPlayerLevel() == requiredLevel) {
+			Item requiredItem = getRequiredItem(nextStage);
+			int requiredCount = getRequiredItemCount(nextStage);
+
+			if (requiredItem != null && requiredCount > 0) {
+				String itemName = getRequiredItemName(nextStage);
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7fYou have reached the level for \u00A7e" +
+								nextStage.displayName() + "\u00A7f! Collect \u00A7c" +
+								requiredCount + "x " + itemName + "\u00A7f and press \u00A7eAdvance\u00A7f in your Sacred Artist Status (J) to break through!"
+				));
+			} else {
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7fYou have reached the level for \u00A7e" +
+								nextStage.displayName() + "\u00A7f! Press \u00A7eAdvance\u00A7f in your Sacred Artist Status (J) to break through!"
+				));
+			}
+		}
+	}
+
+	/**
+	 * Returns true if the player meets ALL requirements to advance to the next stage:
+	 * - Has the required level
+	 * - Has the required items in inventory
+	 */
+	public static boolean canAdvance(ServerPlayer player, CradlePlayerData data) {
+		CradlePlayerData.AdvancementStage currentStage = data.getAdvancementStage();
+		if (!currentStage.hasNext()) {
+			return false;
+		}
+
+		CradlePlayerData.AdvancementStage nextStage = currentStage.next();
+		int requiredLevel = getLevelForStage(nextStage);
+
 		if (data.getPlayerLevel() < requiredLevel) {
-			return; // Not high enough level yet
+			return false;
+		}
+
+		Item requiredItem = getRequiredItem(nextStage);
+		int requiredCount = getRequiredItemCount(nextStage);
+		if (requiredItem != null && requiredCount > 0) {
+			int playerHas = countItemInInventory(player, requiredItem);
+			if (playerHas < requiredCount) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Actually perform the breakthrough: consume items, advance stage, boost stats.
+	 * Called when the player presses the "Advance" button (Phase 9D).
+	 * Returns true if the breakthrough was successful.
+	 */
+	public static boolean attemptBreakthrough(ServerPlayer player, CradlePlayerData data) {
+		if (!canAdvance(player, data)) {
+			return false;
+		}
+
+		CradlePlayerData.AdvancementStage nextStage = data.getAdvancementStage().next();
+
+		// Consume required items
+		Item requiredItem = getRequiredItem(nextStage);
+		int requiredCount = getRequiredItemCount(nextStage);
+		if (requiredItem != null && requiredCount > 0) {
+			removeItemFromInventory(player, requiredItem, requiredCount);
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A77" + requiredCount + "x " +
+							getRequiredItemName(nextStage) + " consumed."
+			));
 		}
 
 		// Advance stage
@@ -81,6 +225,8 @@ public final class BreakthroughManager {
 
 		CradleMod.LOGGER.info("Player {} broke through to {} at level {}",
 				player.getName().getString(), nextStage.name(), data.getPlayerLevel());
+
+		return true;
 	}
 
 	/**
