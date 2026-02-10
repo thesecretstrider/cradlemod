@@ -1,5 +1,7 @@
 package com.cradle.mod;
 
+import com.cradle.mod.block.CradleBlocks;
+import com.cradle.mod.item.CradleItems;
 import com.cradle.mod.network.ChoosePathPayload;
 import com.cradle.mod.network.CradleSyncPayload;
 import com.cradle.mod.network.OpenInfoScreenPayload;
@@ -34,6 +36,10 @@ public class CradleMod implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		LOGGER.info("Cradle Mod initialized!");
+
+		// Register custom items and blocks
+		CradleItems.register();
+		CradleBlocks.register();
 
 		// Register networking packets (server -> client)
 		PayloadTypeRegistry.playS2C().register(CradleSyncPayload.TYPE, CradleSyncPayload.STREAM_CODEC);

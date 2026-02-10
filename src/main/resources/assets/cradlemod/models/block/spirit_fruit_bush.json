@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cross",
+  "textures": {
+    "cross": "cradlemod:block/spirit_fruit_bush"
+  }
+}
