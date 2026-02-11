@@ -59,6 +59,25 @@ public final class CyclingManager {
 				data.setCurrentMadra(data.getCurrentMadra() + passiveRate);
 			}
 
+			// Iron Body passive buff (Steelborn/Raindrop toggle; Bloodforged is instant on P press)
+			// Only re-apply when the effect is missing or about to expire,
+			// so the internal tick counter can progress and the effect actually works.
+			if (data.isIronBodyActive()) {
+				switch (data.getIronBody()) {
+					case STEELBORN -> {
+						if (!player.hasEffect(MobEffects.RESISTANCE) || player.getEffect(MobEffects.RESISTANCE).getDuration() < 10) {
+							player.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, 60, 0, false, false));
+						}
+					}
+					case RAINDROP -> {
+						if (!player.hasEffect(MobEffects.SPEED) || player.getEffect(MobEffects.SPEED).getDuration() < 10) {
+							player.addEffect(new MobEffectInstance(MobEffects.SPEED, 60, 0, false, false));
+						}
+					}
+					default -> {}
+				}
+			}
+
 			// Active cycling: faster XP + Madra gain, but must stand still
 			if (data.isActivelyCycling()) {
 				// Check for movement — if player moved, stop cycling
@@ -159,6 +178,9 @@ public final class CyclingManager {
 				"§6[Cradle] §aLevel up! You are now level " + data.getPlayerLevel() + "!"
 		));
 
+		// Save immediately — level-up is important progress
+		CradleMod.autoSave(player.level().getServer());
+
 		CradleMod.LOGGER.info("Player {} leveled up to {}", player.getName().getString(), data.getPlayerLevel());
 	}
 
@@ -178,7 +200,9 @@ public final class CyclingManager {
 				data.getCurrentMadra(),
 				data.getMaxMadra(),
 				data.isActivelyCycling(),
-				BreakthroughManager.canAdvance(player, data)
+				BreakthroughManager.canAdvance(player, data),
+				data.getIronBody().name(),
+				data.isIronBodyActive()
 		);
 	}
 }

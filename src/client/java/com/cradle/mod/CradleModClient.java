@@ -3,6 +3,7 @@ package com.cradle.mod;
 import com.cradle.mod.network.CradleSyncPayload;
 import com.cradle.mod.network.OpenInfoScreenPayload;
 import com.cradle.mod.network.OpenPathSelectionPayload;
+import com.cradle.mod.network.ToggleIronBodyPayload;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -57,6 +58,16 @@ public class CradleModClient implements ClientModInitializer {
 			)
 	);
 
+	// Keybind: press P to toggle Iron Body
+	private static final KeyMapping IRON_BODY_KEYBIND = KeyBindingHelper.registerKeyBinding(
+			new KeyMapping(
+					"key.cradlemod.iron_body",
+					InputConstants.Type.KEYSYM,
+					GLFW.GLFW_KEY_P,
+					KeyMapping.Category.MISC
+			)
+	);
+
 	@Override
 	public void onInitializeClient() {
 		// ── Welcome message ───────────────────────────────────────────
@@ -104,6 +115,9 @@ public class CradleModClient implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (INFO_KEYBIND.consumeClick()) {
 				client.setScreen(new CradleInfoScreen());
+			}
+			while (IRON_BODY_KEYBIND.consumeClick()) {
+				ClientPlayNetworking.send(new ToggleIronBodyPayload());
 			}
 			CyclingParticleRenderer.tick(client);
 		});

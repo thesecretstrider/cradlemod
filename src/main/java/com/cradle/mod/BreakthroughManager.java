@@ -204,6 +204,24 @@ public final class BreakthroughManager {
 			));
 		}
 
+		// Check for Iron Body crystal when advancing to Iron stage
+		if (nextStage == CradlePlayerData.AdvancementStage.IRON) {
+			CradlePlayerData.IronBody bodyType = detectIronBodyCrystal(player);
+			data.setIronBody(bodyType);
+			if (bodyType != CradlePlayerData.IronBody.NONE) {
+				// Consume the crystal from whichever hand it's in
+				consumeCrystalFromHands(player, bodyType);
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7d" + bodyType.displayName() +
+								" Iron Body awakened!"
+				));
+			} else {
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A77You advance without an Iron Body."
+				));
+			}
+		}
+
 		// Advance stage
 		data.setAdvancementStage(nextStage);
 
@@ -227,6 +245,45 @@ public final class BreakthroughManager {
 				player.getName().getString(), nextStage.name(), data.getPlayerLevel());
 
 		return true;
+	}
+
+	/**
+	 * Checks both hands for an Iron Body crystal item.
+	 * Returns the matching IronBody type, or NONE if no crystal is held.
+	 */
+	private static CradlePlayerData.IronBody detectIronBodyCrystal(ServerPlayer player) {
+		ItemStack mainHand = player.getMainHandItem();
+		ItemStack offHand = player.getOffhandItem();
+
+		if (mainHand.is(CradleItems.BLOODFORGED_CRYSTAL) || offHand.is(CradleItems.BLOODFORGED_CRYSTAL)) {
+			return CradlePlayerData.IronBody.BLOODFORGED;
+		}
+		if (mainHand.is(CradleItems.STEELBORN_CRYSTAL) || offHand.is(CradleItems.STEELBORN_CRYSTAL)) {
+			return CradlePlayerData.IronBody.STEELBORN;
+		}
+		if (mainHand.is(CradleItems.RAINDROP_CRYSTAL) || offHand.is(CradleItems.RAINDROP_CRYSTAL)) {
+			return CradlePlayerData.IronBody.RAINDROP;
+		}
+		return CradlePlayerData.IronBody.NONE;
+	}
+
+	/**
+	 * Consumes one crystal item from whichever hand holds it.
+	 */
+	private static void consumeCrystalFromHands(ServerPlayer player, CradlePlayerData.IronBody bodyType) {
+		Item crystal = switch (bodyType) {
+			case BLOODFORGED -> CradleItems.BLOODFORGED_CRYSTAL;
+			case STEELBORN -> CradleItems.STEELBORN_CRYSTAL;
+			case RAINDROP -> CradleItems.RAINDROP_CRYSTAL;
+			default -> null;
+		};
+		if (crystal == null) return;
+
+		if (player.getMainHandItem().is(crystal)) {
+			player.getMainHandItem().shrink(1);
+		} else if (player.getOffhandItem().is(crystal)) {
+			player.getOffhandItem().shrink(1);
+		}
 	}
 
 	/**

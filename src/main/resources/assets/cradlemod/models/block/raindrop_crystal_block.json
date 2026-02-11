@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cross",
+  "textures": {
+    "cross": "cradlemod:block/raindrop_crystal_block"
+  }
+}

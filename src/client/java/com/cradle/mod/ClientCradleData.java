@@ -19,6 +19,8 @@ public final class ClientCradleData {
 	public static float maxMadra = 100f;
 	public static boolean cycling = false;
 	public static boolean canAdvance = false;
+	public static String ironBody = "NONE";
+	public static boolean ironBodyActive = false;
 
 	/**
 	 * Reset all client data to defaults. Called when disconnecting from a world
@@ -34,6 +36,8 @@ public final class ClientCradleData {
 		maxMadra = 100f;
 		cycling = false;
 		canAdvance = false;
+		ironBody = "NONE";
+		ironBodyActive = false;
 	}
 
 	public static void update(CradleSyncPayload payload) {
@@ -46,6 +50,8 @@ public final class ClientCradleData {
 		maxMadra = payload.maxMadra();
 		cycling = payload.cycling();
 		canAdvance = payload.canAdvance();
+		ironBody = payload.ironBody();
+		ironBodyActive = payload.ironBodyActive();
 	}
 
 	/**
@@ -101,6 +107,30 @@ public final class ClientCradleData {
 			case "IRON" -> 50;
 			case "JADE" -> 100;
 			default -> -1; // GOLD or unknown = max stage
+		};
+	}
+
+	/**
+	 * Returns a human-readable display name for the current Iron Body.
+	 */
+	public static String getIronBodyDisplayName() {
+		return switch (ironBody) {
+			case "BLOODFORGED" -> "Bloodforged";
+			case "STEELBORN" -> "Steelborn";
+			case "RAINDROP" -> "Raindrop";
+			default -> "None";
+		};
+	}
+
+	/**
+	 * Returns the ARGB color for the current Iron Body.
+	 */
+	public static int getIronBodyColor() {
+		return switch (ironBody) {
+			case "BLOODFORGED" -> 0xFFCC3333;
+			case "STEELBORN" -> 0xFF8888AA;
+			case "RAINDROP" -> 0xFF3399FF;
+			default -> 0xFF999999;
 		};
 	}
 

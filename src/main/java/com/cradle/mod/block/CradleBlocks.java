@@ -33,6 +33,17 @@ public final class CradleBlocks {
 			"spirit_fruit_bush", () -> CradleItems.SPIRIT_FRUIT
 	);
 
+	// Iron Body crystal blocks — spawned during special events, emit beacon beams
+	public static final Block BLOODFORGED_CRYSTAL = registerCrystalBlock(
+			"bloodforged_crystal_block", () -> CradleItems.BLOODFORGED_CRYSTAL
+	);
+	public static final Block STEELBORN_CRYSTAL = registerCrystalBlock(
+			"steelborn_crystal_block", () -> CradleItems.STEELBORN_CRYSTAL
+	);
+	public static final Block RAINDROP_CRYSTAL = registerCrystalBlock(
+			"raindrop_crystal_block", () -> CradleItems.RAINDROP_CRYSTAL
+	);
+
 	/**
 	 * Creates and registers a fruit bush block + its BlockItem.
 	 */
@@ -55,6 +66,36 @@ public final class CradleBlocks {
 		Registry.register(BuiltInRegistries.BLOCK, blockKey, block);
 
 		// Create BlockItem with ID set on properties
+		ResourceKey<Item> itemKey = ResourceKey.create(Registries.ITEM, id);
+		Item.Properties itemProps = new Item.Properties()
+				.setId(itemKey)
+				.useBlockDescriptionPrefix();
+		Registry.register(BuiltInRegistries.ITEM, itemKey, new BlockItem(block, itemProps));
+
+		return block;
+	}
+
+	/**
+	 * Creates and registers a crystal block + its BlockItem.
+	 * Higher light level than bushes, no spawn exclusion.
+	 */
+	private static Block registerCrystalBlock(String name, Supplier<Item> crystalItem) {
+		Identifier id = Identifier.fromNamespaceAndPath(CradleMod.MOD_ID, name);
+
+		ResourceKey<Block> blockKey = ResourceKey.create(Registries.BLOCK, id);
+		BlockBehaviour.Properties blockProps = BlockBehaviour.Properties.of()
+				.setId(blockKey)
+				.mapColor(MapColor.DIAMOND)
+				.noCollision()
+				.instabreak()
+				.sound(SoundType.AMETHYST)
+				.lightLevel(state -> 12)
+				.pushReaction(PushReaction.DESTROY)
+				.offsetType(BlockBehaviour.OffsetType.XZ);
+
+		Block block = new IronBodyCrystalBlock(blockProps, crystalItem);
+		Registry.register(BuiltInRegistries.BLOCK, blockKey, block);
+
 		ResourceKey<Item> itemKey = ResourceKey.create(Registries.ITEM, id);
 		Item.Properties itemProps = new Item.Properties()
 				.setId(itemKey)

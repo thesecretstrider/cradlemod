@@ -2,6 +2,14 @@
   "item.cradlemod.vital_fruit": "Vital Fruit",
   "item.cradlemod.spirit_fruit": "Spirit Fruit",
   "item.cradlemod.spirit_stone": "Spirit Stone",
+  "item.cradlemod.bloodforged_crystal": "Bloodforged Crystal",
+  "item.cradlemod.steelborn_crystal": "Steelborn Crystal",
+  "item.cradlemod.raindrop_crystal": "Raindrop Crystal",
   "block.cradlemod.vital_fruit_bush": "Vital Fruit Bush",
-  "block.cradlemod.spirit_fruit_bush": "Spirit Fruit Bush"
+  "block.cradlemod.spirit_fruit_bush": "Spirit Fruit Bush",
+  "block.cradlemod.bloodforged_crystal_block": "Bloodforged Crystal",
+  "block.cradlemod.steelborn_crystal_block": "Steelborn Crystal",
+  "block.cradlemod.raindrop_crystal_block": "Raindrop Crystal",
+  "key.cradlemod.info": "Sacred Artist Status",
+  "key.cradlemod.iron_body": "Toggle Iron Body"
 }

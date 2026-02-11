@@ -32,6 +32,31 @@ public final class CradlePlayerData {
 		}
 	}
 
+	public enum IronBody {
+		NONE,
+		BLOODFORGED,
+		STEELBORN,
+		RAINDROP;
+
+		public String displayName() {
+			return switch (this) {
+				case NONE -> "None";
+				case BLOODFORGED -> "Bloodforged";
+				case STEELBORN -> "Steelborn";
+				case RAINDROP -> "Raindrop";
+			};
+		}
+
+		public int color() {
+			return switch (this) {
+				case NONE -> 0xFFC0C0C0;
+				case BLOODFORGED -> 0xFFCC3333;
+				case STEELBORN -> 0xFF8888AA;
+				case RAINDROP -> 0xFF3399FF;
+			};
+		}
+	}
+
 	public enum AdvancementStage {
 		FOUNDATION,
 		COPPER,
@@ -92,6 +117,8 @@ public final class CradlePlayerData {
 	private float currentMadra;
 	private float maxMadra;
 	private boolean activelyCycling;
+	private IronBody ironBody;
+	private boolean ironBodyActive;
 
 	private static final float DEFAULT_MAX_MADRA = 100.0f;
 
@@ -104,6 +131,8 @@ public final class CradlePlayerData {
 		this.currentMadra = 0.0f;
 		this.maxMadra = DEFAULT_MAX_MADRA;
 		this.activelyCycling = false;
+		this.ironBody = IronBody.NONE;
+		this.ironBodyActive = false;
 	}
 
 	// ── Getters / setters ──────────────────────────────────────────────
@@ -172,6 +201,22 @@ public final class CradlePlayerData {
 		this.activelyCycling = activelyCycling;
 	}
 
+	public IronBody getIronBody() {
+		return ironBody;
+	}
+
+	public void setIronBody(IronBody ironBody) {
+		this.ironBody = Objects.requireNonNull(ironBody, "ironBody");
+	}
+
+	public boolean isIronBodyActive() {
+		return ironBodyActive;
+	}
+
+	public void setIronBodyActive(boolean ironBodyActive) {
+		this.ironBodyActive = ironBodyActive && ironBody != IronBody.NONE;
+	}
+
 	/**
 	 * Returns the cycling speed multiplier for the current advancement stage.
 	 * Higher stages cycle faster (gain more XP and Madra per tick).
@@ -197,6 +242,7 @@ public final class CradlePlayerData {
 		tag.putBoolean("hasChosenPath", hasChosenPath);
 		tag.putFloat("currentMadra", currentMadra);
 		tag.putFloat("maxMadra", maxMadra);
+		tag.putString("ironBody", ironBody.name());
 		return tag;
 	}
 
@@ -223,6 +269,13 @@ public final class CradlePlayerData {
 		if (data.maxMadra <= 0) {
 			data.maxMadra = DEFAULT_MAX_MADRA;
 		}
+
+		try {
+			data.ironBody = IronBody.valueOf(tag.getStringOr("ironBody", "NONE"));
+		} catch (IllegalArgumentException e) {
+			data.ironBody = IronBody.NONE;
+		}
+
 		return data;
 	}
 

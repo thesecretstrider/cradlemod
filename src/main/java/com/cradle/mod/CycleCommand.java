@@ -165,6 +165,39 @@ public final class CycleCommand {
 									);
 									return 1;
 								})))
+
+				// /cycle setironbody <type>
+				.then(Commands.literal("setironbody")
+						.requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+						.then(Commands.argument("type", StringArgumentType.word())
+								.suggests((ctx, builder) -> {
+									for (CradlePlayerData.IronBody body : CradlePlayerData.IronBody.values()) {
+										builder.suggest(body.name());
+									}
+									return builder.buildFuture();
+								})
+								.executes(ctx -> {
+									ServerPlayer player = ctx.getSource().getPlayerOrException();
+									CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+									String typeName = StringArgumentType.getString(ctx, "type");
+
+									try {
+										CradlePlayerData.IronBody body =
+												CradlePlayerData.IronBody.valueOf(typeName.toUpperCase());
+										data.setIronBody(body);
+										if (body == CradlePlayerData.IronBody.NONE) {
+											data.setIronBodyActive(false);
+										}
+										ctx.getSource().sendSuccess(
+												() -> Component.literal("§6[Cradle] §fIron Body set to §e" + body.displayName()),
+												true
+										);
+										return 1;
+									} catch (IllegalArgumentException e) {
+										ctx.getSource().sendFailure(Component.literal("Unknown Iron Body type: " + typeName));
+										return 0;
+									}
+								})))
 		);
 	}
 }

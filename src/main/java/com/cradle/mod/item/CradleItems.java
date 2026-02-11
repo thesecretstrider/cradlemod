@@ -20,6 +20,11 @@ public final class CradleItems {
 	public static final Item SPIRIT_FRUIT = registerItem("spirit_fruit", new Item.Properties());
 	public static final Item SPIRIT_STONE = registerItem("spirit_stone", new Item.Properties());
 
+	// Iron Body crystals — found in the world during special events
+	public static final Item BLOODFORGED_CRYSTAL = registerItem("bloodforged_crystal", new Item.Properties());
+	public static final Item STEELBORN_CRYSTAL = registerItem("steelborn_crystal", new Item.Properties());
+	public static final Item RAINDROP_CRYSTAL = registerItem("raindrop_crystal", new Item.Properties());
+
 	/**
 	 * Helper: creates a ResourceKey, sets it on the properties, then registers.
 	 */

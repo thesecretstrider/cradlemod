@@ -15,7 +15,9 @@ public record CradleSyncPayload(
 		float currentMadra,
 		float maxMadra,
 		boolean cycling,
-		boolean canAdvance
+		boolean canAdvance,
+		String ironBody,
+		boolean ironBodyActive
 ) implements CustomPacketPayload {
 
 	public static final Type<CradleSyncPayload> TYPE =
@@ -32,6 +34,8 @@ public record CradleSyncPayload(
 					ByteBufCodecs.FLOAT, CradleSyncPayload::maxMadra,
 					ByteBufCodecs.BOOL, CradleSyncPayload::cycling,
 					ByteBufCodecs.BOOL, CradleSyncPayload::canAdvance,
+					ByteBufCodecs.STRING_UTF8, CradleSyncPayload::ironBody,
+					ByteBufCodecs.BOOL, CradleSyncPayload::ironBodyActive,
 					CradleSyncPayload::new
 			);
 
