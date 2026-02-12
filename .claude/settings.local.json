@@ -264,7 +264,32 @@
       "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap\" -public \"C:\\\\Users\\\\aaron\\\\Documents\\\\cradlemod\\\\tmp_extract\\\\net\\\\minecraft\\\\world\\\\effect\\\\MobEffects.class\")",
       "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\jar\" xf \"C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-common\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\minecraft-common-1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2.jar\" net/minecraft/world/effect/MobEffects.class)",
       "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap\" -p \"C:\\\\Users\\\\aaron\\\\Documents\\\\cradlemod\\\\net\\\\minecraft\\\\world\\\\effect\\\\MobEffects.class\")",
-      "Bash(cmd /c \"cd /d C:\\\\Users\\\\aaron\\\\Documents\\\\cradlemod && mkdir tmp_extract 2>nul & cd tmp_extract && \"\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\jar\"\" xf \"\"C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-client\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\minecraft-client-1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2.jar\"\" net/minecraft/client/KeyMapping$Category.class\")"
+      "Bash(cmd /c \"cd /d C:\\\\Users\\\\aaron\\\\Documents\\\\cradlemod && mkdir tmp_extract 2>nul & cd tmp_extract && \"\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\jar\"\" xf \"\"C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-client\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\minecraft-client-1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2.jar\"\" net/minecraft/client/KeyMapping$Category.class\")",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap\" -c -p \"net/minecraft/client/KeyMapping$Category.class\")",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap\" -c \"net/minecraft/client/KeyMapping$Category.class\")",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap\" -p -c \"net/minecraft/client/KeyMapping$Category.class\")",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap\" -p -c \"net/minecraft/client/KeyMapping$Category\")",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap\" -p -c 'net/minecraft/client/KeyMapping$Category')",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap\" -p -c \"KeyMapping$Category.class\")",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap\" -verbose \"net.minecraft.client.KeyMapping$Category\")",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/jar\":*)",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap\" -p -c -cp . \"net.minecraft.client.KeyMapping$Category\")",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap\" -public \"net/minecraft/resources/Identifier.class\")",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/jar\" tf C:/Users/aaron/Documents/cradlemod/build/libs/cradlemod-1.0.0.jar)",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/jar\" xf C:/Users/aaron/Documents/cradlemod/build/libs/cradlemod-1.0.0.jar assets/cradlemod/lang/en_us.json)",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/jar\" tf C:/Users/aaron/Documents/cradlemod/build/devlibs/cradlemod-1.0.0-dev.jar)",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap.exe\" -public /tmp/mc_inspect/net/minecraft/network/codec/StreamCodec.class)",
+      "Bash(cmd /c \"dir /s /b C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-common\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\*.jar\")",
+      "Bash(MC_JAR=\"C:/Users/aaron/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-common/1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2/minecraft-common-1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2.jar\":*)",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap.exe\" -p -cp \"$MC_JAR\" net.minecraft.world.entity.ai.attributes.Attributes)",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap.exe\" -p -cp \"$MC_JAR\" net.minecraft.world.entity.ai.attributes.AttributeModifier)",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap.exe\" -p -cp \"$MC_JAR\" net.minecraft.world.entity.ai.attributes.AttributeInstance)",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap.exe\" -p -cp \"$MC_JAR\" net.minecraft.server.level.ServerPlayer)",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap.exe\" -p -cp \"$MC_JAR\" net.minecraft.world.entity.LivingEntity)",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap.exe\" -p -cp \"$MC_JAR\" net.minecraft.world.entity.Entity)",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap.exe\" -p -cp \"$MC_JAR\" net.minecraft.world.effect.MobEffects)",
+      "Bash(cd:*)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -cp \"C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-common\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\minecraft-common-1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2.jar\" net.minecraft.server.level.ServerPlayer)"
     ]
   }
 }

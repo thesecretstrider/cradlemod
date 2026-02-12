@@ -4,6 +4,7 @@ import com.cradle.mod.network.CradleSyncPayload;
 import com.cradle.mod.network.OpenInfoScreenPayload;
 import com.cradle.mod.network.OpenPathSelectionPayload;
 import com.cradle.mod.network.ToggleIronBodyPayload;
+import com.cradle.mod.network.UseEnforcerPayload;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -48,13 +49,17 @@ public class CradleModClient implements ClientModInitializer {
 	private static int welcomeTicksRemaining = 0;
 	private static String welcomeMessage = "";
 
+	// Custom keybind category — appears as its own section in Controls settings
+	private static final KeyMapping.Category CRADLE_CATEGORY =
+			KeyMapping.Category.register(net.minecraft.resources.Identifier.fromNamespaceAndPath("cradlemod", "cradle"));
+
 	// Keybind: press J to open Sacred Artist Status screen
 	private static final KeyMapping INFO_KEYBIND = KeyBindingHelper.registerKeyBinding(
 			new KeyMapping(
 					"key.cradlemod.info",
 					InputConstants.Type.KEYSYM,
 					GLFW.GLFW_KEY_J,
-					KeyMapping.Category.MISC
+					CRADLE_CATEGORY
 			)
 	);
 
@@ -64,7 +69,17 @@ public class CradleModClient implements ClientModInitializer {
 					"key.cradlemod.iron_body",
 					InputConstants.Type.KEYSYM,
 					GLFW.GLFW_KEY_P,
-					KeyMapping.Category.MISC
+					CRADLE_CATEGORY
+			)
+	);
+
+	// Keybind: press R to toggle Enforcer technique
+	private static final KeyMapping ENFORCER_KEYBIND = KeyBindingHelper.registerKeyBinding(
+			new KeyMapping(
+					"key.cradlemod.enforcer",
+					InputConstants.Type.KEYSYM,
+					GLFW.GLFW_KEY_Z,
+					CRADLE_CATEGORY
 			)
 	);
 
@@ -118,6 +133,9 @@ public class CradleModClient implements ClientModInitializer {
 			}
 			while (IRON_BODY_KEYBIND.consumeClick()) {
 				ClientPlayNetworking.send(new ToggleIronBodyPayload());
+			}
+			while (ENFORCER_KEYBIND.consumeClick()) {
+				ClientPlayNetworking.send(new UseEnforcerPayload());
 			}
 			CyclingParticleRenderer.tick(client);
 		});

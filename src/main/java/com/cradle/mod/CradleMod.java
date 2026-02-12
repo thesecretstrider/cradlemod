@@ -10,6 +10,7 @@ import com.cradle.mod.network.CradleSyncPayload;
 import com.cradle.mod.network.OpenInfoScreenPayload;
 import com.cradle.mod.network.OpenPathSelectionPayload;
 import com.cradle.mod.network.ToggleIronBodyPayload;
+import com.cradle.mod.network.UseEnforcerPayload;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerEntityCombatEvents;
@@ -72,6 +73,7 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(ChoosePathPayload.TYPE, ChoosePathPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(AttemptAdvancePayload.TYPE, AttemptAdvancePayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(ToggleIronBodyPayload.TYPE, ToggleIronBodyPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(UseEnforcerPayload.TYPE, UseEnforcerPayload.STREAM_CODEC);
 
 		// Send initial data sync when a player joins, and open path selection if needed
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
@@ -192,6 +194,62 @@ public class CradleMod implements ModInitializer {
 			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
 		});
 
+		// Handle Enforcer technique activation from the client (player pressed R)
+		// Toggles the Enforcer technique on/off. Requires Copper stage or higher.
+		ServerPlayNetworking.registerGlobalReceiver(UseEnforcerPayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+
+			// Must have chosen a path
+			if (!data.hasChosenPath() || data.getChosenPath() == CradlePlayerData.Path.UNSET) {
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7cYou haven't chosen a path yet."
+				));
+				return;
+			}
+
+			// Must be at least Copper stage to use Enforcer
+			if (data.getAdvancementStage().ordinal() < CradlePlayerData.AdvancementStage.COPPER.ordinal()) {
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7cEnforcer techniques require Copper stage or higher."
+				));
+				return;
+			}
+
+			// Toggle
+			if (data.isEnforcerActive()) {
+				CyclingManager.deactivateEnforcer(player, data);
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A77Enforcer technique deactivated."
+				));
+			} else {
+				// Check if player has Madra
+				if (data.getCurrentMadra() <= 0) {
+					player.sendSystemMessage(Component.literal(
+							"\u00A76[Cradle] \u00A7cNot enough Madra to activate Enforcer technique!"
+					));
+					return;
+				}
+
+				CyclingManager.activateEnforcer(player, data);
+
+				// Send path-specific activation message
+				String techniqueName = switch (data.getChosenPath()) {
+					case BLACK_FLAME -> "Burning Body";
+					case ENDLESS_SWORD -> "Flowing Edge";
+					case STELLAR_SPEAR -> "Stellar Alignment";
+					case CLOUD_HAMMER -> "Thunderous Weight";
+					case HOLLOW_KING -> "Hollow Circulation";
+					default -> "Enforcer Technique";
+				};
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7a" + techniqueName + " activated!"
+				));
+			}
+
+			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
+		});
+
 		// Load player data BEFORE players can join (SERVER_STARTING fires before
 		// any connection is accepted, unlike SERVER_STARTED which can race with JOIN)
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
@@ -239,8 +297,22 @@ public class CradleMod implements ModInitializer {
 			}
 		});
 
-		// Also save when a player disconnects (so their latest data is on disk)
+		// Clean up player state and save when a player disconnects
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+			ServerPlayer player = handler.getPlayer();
+			CradlePlayerData data = CradlePlayerData.get(player.getUUID());
+			if (data != null) {
+				// Deactivate enforcer so attribute modifiers are cleaned up
+				if (data.isEnforcerActive()) {
+					CyclingManager.deactivateEnforcer(player, data);
+				}
+				// Deactivate iron body toggle
+				data.setIronBodyActive(false);
+				// Stop cycling
+				if (data.isActivelyCycling()) {
+					CyclingManager.stopCycling(player, data);
+				}
+			}
 			autoSave(server);
 		});
 

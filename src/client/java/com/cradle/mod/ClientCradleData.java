@@ -21,6 +21,7 @@ public final class ClientCradleData {
 	public static boolean canAdvance = false;
 	public static String ironBody = "NONE";
 	public static boolean ironBodyActive = false;
+	public static boolean enforcerActive = false;
 
 	/**
 	 * Reset all client data to defaults. Called when disconnecting from a world
@@ -38,6 +39,7 @@ public final class ClientCradleData {
 		canAdvance = false;
 		ironBody = "NONE";
 		ironBodyActive = false;
+		enforcerActive = false;
 	}
 
 	public static void update(CradleSyncPayload payload) {
@@ -52,6 +54,7 @@ public final class ClientCradleData {
 		canAdvance = payload.canAdvance();
 		ironBody = payload.ironBody();
 		ironBodyActive = payload.ironBodyActive();
+		enforcerActive = payload.enforcerActive();
 	}
 
 	/**
@@ -131,6 +134,20 @@ public final class ClientCradleData {
 			case "STEELBORN" -> 0xFF8888AA;
 			case "RAINDROP" -> 0xFF3399FF;
 			default -> 0xFF999999;
+		};
+	}
+
+	/**
+	 * Returns the name of the Enforcer technique for the current path.
+	 */
+	public static String getEnforcerTechniqueName() {
+		return switch (path) {
+			case "BLACK_FLAME" -> "Burning Body";
+			case "ENDLESS_SWORD" -> "Flowing Edge";
+			case "STELLAR_SPEAR" -> "Stellar Alignment";
+			case "CLOUD_HAMMER" -> "Thunderous Weight";
+			case "HOLLOW_KING" -> "Hollow Circulation";
+			default -> "None";
 		};
 	}
 

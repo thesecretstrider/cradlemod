@@ -11,5 +11,7 @@
   "block.cradlemod.steelborn_crystal_block": "Steelborn Crystal",
   "block.cradlemod.raindrop_crystal_block": "Raindrop Crystal",
   "key.cradlemod.info": "Sacred Artist Status",
-  "key.cradlemod.iron_body": "Toggle Iron Body"
+  "key.cradlemod.iron_body": "Toggle Iron Body",
+  "key.cradlemod.enforcer": "Enforcer Technique",
+  "category.cradlemod.cradle": "Cradle"
 }

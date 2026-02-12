@@ -119,6 +119,7 @@ public final class CradlePlayerData {
 	private boolean activelyCycling;
 	private IronBody ironBody;
 	private boolean ironBodyActive;
+	private boolean enforcerActive;
 
 	private static final float DEFAULT_MAX_MADRA = 100.0f;
 
@@ -133,6 +134,7 @@ public final class CradlePlayerData {
 		this.activelyCycling = false;
 		this.ironBody = IronBody.NONE;
 		this.ironBodyActive = false;
+		this.enforcerActive = false;
 	}
 
 	// ── Getters / setters ──────────────────────────────────────────────
@@ -215,6 +217,14 @@ public final class CradlePlayerData {
 
 	public void setIronBodyActive(boolean ironBodyActive) {
 		this.ironBodyActive = ironBodyActive && ironBody != IronBody.NONE;
+	}
+
+	public boolean isEnforcerActive() {
+		return enforcerActive;
+	}
+
+	public void setEnforcerActive(boolean enforcerActive) {
+		this.enforcerActive = enforcerActive;
 	}
 
 	/**
