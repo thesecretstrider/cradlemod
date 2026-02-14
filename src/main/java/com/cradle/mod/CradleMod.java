@@ -11,6 +11,9 @@ import com.cradle.mod.network.OpenInfoScreenPayload;
 import com.cradle.mod.network.OpenPathSelectionPayload;
 import com.cradle.mod.network.ToggleIronBodyPayload;
 import com.cradle.mod.network.UseEnforcerPayload;
+import com.cradle.mod.network.UseStrikerPayload;
+import com.cradle.mod.entity.CradleEntities;
+import com.cradle.mod.entity.StrikerProjectileEntity;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerEntityCombatEvents;
@@ -24,8 +27,12 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.world.phys.Vec3;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,6 +54,13 @@ public class CradleMod implements ModInitializer {
 	private static final long BLOODFORGED_COOLDOWN_MS = 30_000;
 	private static final Map<UUID, Long> bloodforgedCooldowns = new HashMap<>();
 
+	// Striker technique cooldown: 2 seconds (2000ms)
+	private static final long STRIKER_COOLDOWN_MS = 2_000;
+	private static final Map<UUID, Long> strikerCooldowns = new HashMap<>();
+
+	// Striker Madra cost per use
+	private static final float STRIKER_MADRA_COST = 15.0f;
+
 	// Auto-save every 30 seconds (600 ticks at 20 tps)
 	// Frequent saves protect against MC being closed without clean shutdown
 	private static final int AUTO_SAVE_INTERVAL_TICKS = 600;
@@ -59,6 +73,9 @@ public class CradleMod implements ModInitializer {
 		// Register custom items and blocks
 		CradleItems.register();
 		CradleBlocks.register();
+
+		// Register custom entity types
+		CradleEntities.register();
 
 		// Register worldgen (bush spawning) and loot table modifications (Spirit Stone in chests)
 		CradleWorldGen.register();
@@ -74,6 +91,7 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(AttemptAdvancePayload.TYPE, AttemptAdvancePayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(ToggleIronBodyPayload.TYPE, ToggleIronBodyPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(UseEnforcerPayload.TYPE, UseEnforcerPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(UseStrikerPayload.TYPE, UseStrikerPayload.STREAM_CODEC);
 
 		// Send initial data sync when a player joins, and open path selection if needed
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
@@ -247,6 +265,82 @@ public class CradleMod implements ModInitializer {
 				));
 			}
 
+			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
+		});
+
+		// Handle Striker technique from the client (player pressed X)
+		// Fires a projectile. Requires Iron stage or higher. Costs Madra. Has cooldown.
+		ServerPlayNetworking.registerGlobalReceiver(UseStrikerPayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+
+			// Must have chosen a path
+			if (!data.hasChosenPath() || data.getChosenPath() == CradlePlayerData.Path.UNSET) {
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7cYou haven't chosen a path yet."
+				));
+				return;
+			}
+
+			// Must be at least Copper stage to use Striker
+			if (data.getAdvancementStage().ordinal() < CradlePlayerData.AdvancementStage.COPPER.ordinal()) {
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7cStriker techniques require Copper stage or higher."
+				));
+				return;
+			}
+
+			// Cooldown check
+			long now = System.currentTimeMillis();
+			Long lastUse = strikerCooldowns.get(player.getUUID());
+			if (lastUse != null && now - lastUse < STRIKER_COOLDOWN_MS) {
+				long remainingMs = STRIKER_COOLDOWN_MS - (now - lastUse);
+				double remainingSec = Math.ceil(remainingMs / 100.0) / 10.0;
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7cStriker on cooldown! \u00A7e" + String.format("%.1f", remainingSec) + "s \u00A7cremaining."
+				));
+				return;
+			}
+
+			// Madra cost (Gold stage gets 30% discount)
+			float cost = STRIKER_MADRA_COST;
+			if (data.getAdvancementStage() == CradlePlayerData.AdvancementStage.GOLD) {
+				cost *= 0.7f;
+			}
+			if (data.getCurrentMadra() < cost) {
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7cNot enough Madra! Need \u00A7e" + String.format("%.0f", cost) + "\u00A7c."
+				));
+				return;
+			}
+
+			// Deduct Madra and set cooldown
+			data.setCurrentMadra(data.getCurrentMadra() - cost);
+			strikerCooldowns.put(player.getUUID(), now);
+
+			// Spawn the projectile
+			ServerLevel serverLevel = (ServerLevel) player.level();
+			Vec3 look = player.getLookAngle();
+			boolean isGold = data.getAdvancementStage() == CradlePlayerData.AdvancementStage.GOLD;
+
+			StrikerProjectileEntity projectile = new StrikerProjectileEntity(
+					serverLevel, player, look, data.getChosenPath(), isGold);
+
+			// Position at eye height, slightly forward
+			projectile.setPos(
+					player.getX() + look.x * 0.5,
+					player.getEyeY() - 0.1,
+					player.getZ() + look.z * 0.5
+			);
+
+			Projectile.spawnProjectileUsingShoot(
+					projectile, serverLevel, ItemStack.EMPTY,
+					look.x, look.y, look.z,
+					1.5f,  // speed
+					0.0f   // divergence (perfectly accurate)
+			);
+
+			// Sync updated Madra to client
 			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
 		});
 

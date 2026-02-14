@@ -289,7 +289,15 @@
       "Bash(\"C:/Program Files/Java/jdk-21/bin/javap.exe\" -p -cp \"$MC_JAR\" net.minecraft.world.entity.Entity)",
       "Bash(\"C:/Program Files/Java/jdk-21/bin/javap.exe\" -p -cp \"$MC_JAR\" net.minecraft.world.effect.MobEffects)",
       "Bash(cd:*)",
-      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -cp \"C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-common\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\minecraft-common-1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2.jar\" net.minecraft.server.level.ServerPlayer)"
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -cp \"C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-common\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\minecraft-common-1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2.jar\" net.minecraft.server.level.ServerPlayer)",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/jar.exe\" tf:*)",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap.exe\" -p -cp \"C:/Users/aaron/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-common/1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2/minecraft-common-1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2.jar\" net.minecraft.world.entity.Entity)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -cp \"/tmp/test_jar\" net.minecraft.world.damagesource.DamageSources)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -v net/minecraft/client/renderer/entity/EntityRenderer.class)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -v net/minecraft/client/renderer/entity/EntityRendererProvider.class)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -v /tmp/net/minecraft/client/renderer/entity/EntityRenderer.class)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" /tmp/net/minecraft/client/renderer/entity/EntityRenderer.class)",
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" /tmp/net/minecraft/client/renderer/entity/state/EntityRenderState.class)"
     ]
   }
 }

@@ -5,8 +5,12 @@ import com.cradle.mod.network.OpenInfoScreenPayload;
 import com.cradle.mod.network.OpenPathSelectionPayload;
 import com.cradle.mod.network.ToggleIronBodyPayload;
 import com.cradle.mod.network.UseEnforcerPayload;
+import com.cradle.mod.network.UseStrikerPayload;
+import com.cradle.mod.entity.CradleEntities;
+import com.cradle.mod.entity.StrikerProjectileRenderer;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -73,12 +77,22 @@ public class CradleModClient implements ClientModInitializer {
 			)
 	);
 
-	// Keybind: press R to toggle Enforcer technique
+	// Keybind: press Z to toggle Enforcer technique
 	private static final KeyMapping ENFORCER_KEYBIND = KeyBindingHelper.registerKeyBinding(
 			new KeyMapping(
 					"key.cradlemod.enforcer",
 					InputConstants.Type.KEYSYM,
 					GLFW.GLFW_KEY_Z,
+					CRADLE_CATEGORY
+			)
+	);
+
+	// Keybind: press X to fire Striker technique
+	private static final KeyMapping STRIKER_KEYBIND = KeyBindingHelper.registerKeyBinding(
+			new KeyMapping(
+					"key.cradlemod.striker",
+					InputConstants.Type.KEYSYM,
+					GLFW.GLFW_KEY_X,
 					CRADLE_CATEGORY
 			)
 	);
@@ -92,6 +106,9 @@ public class CradleModClient implements ClientModInitializer {
 				showWelcomeMessageOncePerWorld(client);
 			}
 		});
+
+		// ── Register entity renderers ────────────────────────────────
+		EntityRendererRegistry.register(CradleEntities.STRIKER_PROJECTILE, StrikerProjectileRenderer::new);
 
 		// ── Reset client data when disconnecting ─────────────────────
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
@@ -136,6 +153,9 @@ public class CradleModClient implements ClientModInitializer {
 			}
 			while (ENFORCER_KEYBIND.consumeClick()) {
 				ClientPlayNetworking.send(new UseEnforcerPayload());
+			}
+			while (STRIKER_KEYBIND.consumeClick()) {
+				ClientPlayNetworking.send(new UseStrikerPayload());
 			}
 			CyclingParticleRenderer.tick(client);
 		});
