@@ -298,7 +298,9 @@
       "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -v /tmp/net/minecraft/client/renderer/entity/EntityRenderer.class)",
       "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" /tmp/net/minecraft/client/renderer/entity/EntityRenderer.class)",
       "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" /tmp/net/minecraft/client/renderer/entity/state/EntityRenderState.class)",
-      "Bash(./gradlew.bat build:*)"
+      "Bash(./gradlew.bat build:*)",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/jar\" tf fabric-entity-events-v1-3.0.5+4ebb5c0853.jar)",
+      "Bash(\"C:/Program Files/Java/jdk-21/bin/javap\" -classpath \"C:/Users/aaron/.gradle/caches/modules-2/files-2.1/net.fabricmc.fabric-api/fabric-entity-events-v1/3.0.5+4ebb5c0853/47ac34b32516b6ffc166a42db10466221905eb1c/fabric-entity-events-v1-3.0.5+4ebb5c0853.jar\" -p \"net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents\")"
     ]
   }
 }

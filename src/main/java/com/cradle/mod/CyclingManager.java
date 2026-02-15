@@ -194,6 +194,14 @@ public final class CyclingManager {
 
 				// Add cycling XP (scales with stage)
 				float multiplier = data.getCyclingSpeedMultiplier();
+
+				// Underlord–Archlord: cycling while using abilities runs at half speed
+				// Sage/Monarch: full speed (perfect aura control)
+				boolean usingAbility = data.isEnforcerActive() || data.isRulerActive();
+				if (usingAbility && !data.hasSage()) {
+					multiplier *= 0.5f;
+				}
+
 				data.setCyclingXp(data.getCyclingXp() + (int) (ACTIVE_XP_PER_TICK * multiplier));
 
 				// Add Madra (faster than passive, scales with stage)
@@ -228,13 +236,13 @@ public final class CyclingManager {
 
 	/**
 	 * Returns true if the player can maintain cycling while using abilities.
-	 * Below Low Gold, using techniques disrupts cycling.
-	 * At Low Gold and above, the player has mastered their madra flow.
+	 * Below Underlord: techniques disrupt cycling entirely.
+	 * Underlord–Archlord: can cycle while using abilities, but at half speed.
+	 * Sage/Monarch: full speed cycling while using abilities (perfect aura control).
 	 */
 	public static boolean canCycleWhileUsingAbilities(CradlePlayerData data) {
-		// Underlord+ has mastered their madra flow — can cycle while using abilities
-		// Sage has perfect aura control — always allowed
 		if (data.hasSage()) return true;
+		if (data.hasHerald()) return true; // Herald's body transcends physical limits
 		return data.getAdvancementStage().ordinal() >= CradlePlayerData.AdvancementStage.UNDERLORD.ordinal();
 	}
 
