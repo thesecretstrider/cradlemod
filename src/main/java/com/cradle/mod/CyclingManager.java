@@ -9,6 +9,8 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.resources.Identifier;
 
 import java.util.HashMap;
@@ -70,6 +72,16 @@ public final class CyclingManager {
 	// Tracks strain tick counter for Burning Body (Black Flame)
 	private static final Map<UUID, Integer> BURNING_BODY_STRAIN_TICKS = new HashMap<>();
 
+	// ── Ruler tuning constants ────────────────────────────────────────
+	// Madra drain per tick while Ruler is active
+	private static final float RULER_MADRA_DRAIN_PER_TICK = 0.4f;
+	// Ruler area radius (blocks)
+	private static final double RULER_RADIUS = 6.0;
+	// How often Ruler effects tick on nearby enemies (every N ticks)
+	private static final int RULER_EFFECT_INTERVAL = 10; // every 0.5 seconds
+	// Tracks Ruler effect tick counter
+	private static final Map<UUID, Integer> RULER_EFFECT_TICKS = new HashMap<>();
+
 	// ── Tick handler ───────────────────────────────────────────────────
 
 	public static void onServerTick(MinecraftServer server) {
@@ -112,10 +124,8 @@ public final class CyclingManager {
 					drain -= HOLLOW_CIRCULATION_REGEN_BONUS;
 				}
 
-				// Gold stage: 30% reduced Madra cost
-				if (data.getAdvancementStage() == CradlePlayerData.AdvancementStage.GOLD) {
-					drain *= 0.7f;
-				}
+				// Higher stages reduce Madra cost (graduated from 1.0x down to 0.4x at Monarch)
+				drain *= data.getMadraCostMultiplier();
 
 				data.setCurrentMadra(data.getCurrentMadra() - Math.max(0, drain));
 
@@ -128,6 +138,28 @@ public final class CyclingManager {
 				} else {
 					// Apply path-specific effects
 					applyEnforcerEffects(player, data);
+				}
+			}
+
+			// ── Ruler technique tick (C key toggle) ──────────────────
+			if (data.isRulerActive()) {
+				float drain = RULER_MADRA_DRAIN_PER_TICK * data.getMadraCostMultiplier();
+				data.setCurrentMadra(data.getCurrentMadra() - drain);
+
+				if (data.getCurrentMadra() <= 0) {
+					data.setRulerActive(false);
+					RULER_EFFECT_TICKS.remove(playerId);
+					player.sendSystemMessage(Component.literal(
+							"\u00A76[Cradle] \u00A7cRuler technique deactivated — out of Madra!"
+					));
+				} else {
+					// Apply area effects every RULER_EFFECT_INTERVAL ticks
+					int rulerTick = RULER_EFFECT_TICKS.getOrDefault(playerId, 0) + 1;
+					RULER_EFFECT_TICKS.put(playerId, rulerTick);
+					if (rulerTick >= RULER_EFFECT_INTERVAL) {
+						RULER_EFFECT_TICKS.put(playerId, 0);
+						applyRulerEffects(player, data);
+					}
 				}
 			}
 
@@ -163,7 +195,7 @@ public final class CyclingManager {
 				data.setCurrentMadra(data.getCurrentMadra() + ACTIVE_MADRA_PER_TICK * multiplier);
 
 				// Check for level-up (capped at next breakthrough level)
-				int nextBreakthroughLevel = BreakthroughManager.getNextBreakthroughLevel(data.getAdvancementStage());
+				int nextBreakthroughLevel = BreakthroughManager.getNextBreakthroughLevel(data);
 				boolean atCap = nextBreakthroughLevel > 0 && data.getPlayerLevel() >= nextBreakthroughLevel;
 
 				if (!atCap) {
@@ -185,6 +217,17 @@ public final class CyclingManager {
 			// Send sync packet to client every tick (packet is tiny, ~30 bytes)
 			ServerPlayNetworking.send(player, createSyncPayload(player, data));
 		}
+	}
+
+	// ── Cycling + ability conflict ────────────────────────────────────
+
+	/**
+	 * Returns true if the player can maintain cycling while using abilities.
+	 * Below Low Gold, using techniques disrupts cycling.
+	 * At Low Gold and above, the player has mastered their madra flow.
+	 */
+	public static boolean canCycleWhileUsingAbilities(CradlePlayerData data) {
+		return data.getAdvancementStage().ordinal() >= CradlePlayerData.AdvancementStage.LOW_GOLD.ordinal();
 	}
 
 	// ── Cycling start/stop ────────────────────────────────────────────
@@ -234,23 +277,21 @@ public final class CyclingManager {
 	 * and potion effects for visual/status effects.
 	 */
 	private static void applyEnforcerEffects(ServerPlayer player, CradlePlayerData data) {
-		boolean isGold = data.getAdvancementStage() == CradlePlayerData.AdvancementStage.GOLD;
+		float powerMult = data.getAbilityPowerMultiplier();
 
 		switch (data.getChosenPath()) {
 			case BLACK_FLAME -> {
-				// Burning Body: +attack damage, +sprint speed, attacks ignite enemies (via Fire Aspect-like effect)
+				// Burning Body: +attack damage, +sprint speed, attacks ignite enemies
 				// Self-damage over time as strain
-				double dmgBonus = isGold ? 6.0 : 4.0;  // +4 damage (Gold: +6)
-				double speedBonus = isGold ? 0.06 : 0.04; // +speed
+				double dmgBonus = 4.0 * powerMult;
+				double speedBonus = 0.04 * powerMult;
 
 				ensureModifier(player, Attributes.ATTACK_DAMAGE, ENFORCER_ATTACK_DAMAGE_ID,
 						dmgBonus, AttributeModifier.Operation.ADD_VALUE);
 				ensureModifier(player, Attributes.MOVEMENT_SPEED, ENFORCER_SPEED_ID,
 						speedBonus, AttributeModifier.Operation.ADD_VALUE);
 
-				// Fire resistance (so self-fire from Fire Aspect doesn't annoy)
-				// Actually, apply fire aspect via setting attack targets on fire in a separate event
-				// For now: FIRE_RESISTANCE so the player doesn't get annoyed by their own fire
+				// Fire resistance so the player doesn't get annoyed by their own fire
 				if (!player.hasEffect(MobEffects.FIRE_RESISTANCE) || player.getEffect(MobEffects.FIRE_RESISTANCE).getDuration() < 10) {
 					player.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 60, 0, false, false));
 				}
@@ -260,14 +301,13 @@ public final class CyclingManager {
 				BURNING_BODY_STRAIN_TICKS.put(player.getUUID(), strainTicks);
 				if (strainTicks >= BURNING_BODY_STRAIN_INTERVAL) {
 					BURNING_BODY_STRAIN_TICKS.put(player.getUUID(), 0);
-					// Use generic damage that bypasses armor
 					player.hurtServer(player.level(), player.damageSources().magic(), BURNING_BODY_STRAIN_DAMAGE);
 				}
 			}
 
 			case ENDLESS_SWORD -> {
 				// Flowing Edge: +attack speed, reduced attack cooldown
-				double atkSpeedBonus = isGold ? 1.5 : 1.0; // +1.0 attack speed (Gold: +1.5)
+				double atkSpeedBonus = 1.0 * powerMult;
 
 				ensureModifier(player, Attributes.ATTACK_SPEED, ENFORCER_ATTACK_SPEED_ID,
 						atkSpeedBonus, AttributeModifier.Operation.ADD_VALUE);
@@ -275,33 +315,33 @@ public final class CyclingManager {
 
 			case STELLAR_SPEAR -> {
 				// Stellar Alignment: +forward speed, reduced knockback taken
-				double speedBonus = isGold ? 0.06 : 0.04;
-				double kbResist = isGold ? 0.8 : 0.6;
+				double speedBonus = 0.04 * powerMult;
+				double kbResist = 0.6 * powerMult;
 
 				ensureModifier(player, Attributes.MOVEMENT_SPEED, ENFORCER_SPEED_ID,
 						speedBonus, AttributeModifier.Operation.ADD_VALUE);
 				ensureModifier(player, Attributes.KNOCKBACK_RESISTANCE, ENFORCER_KNOCKBACK_RESISTANCE_ID,
-						kbResist, AttributeModifier.Operation.ADD_VALUE);
+						Math.min(kbResist, 1.0), AttributeModifier.Operation.ADD_VALUE);
 			}
 
 			case CLOUD_HAMMER -> {
 				// Thunderous Weight: +armor, +knockback dealt, -movement speed
-				double armorBonus = isGold ? 8.0 : 6.0;
-				double speedPenalty = isGold ? -0.02 : -0.03; // Less penalty at Gold
+				double armorBonus = 6.0 * powerMult;
+				double speedPenalty = -0.03 + (powerMult - 1.0) * 0.01; // Less penalty at higher stages
+				double knockbackBonus = 2.0 * powerMult;
 
 				ensureModifier(player, Attributes.ARMOR, ENFORCER_ARMOR_ID,
 						armorBonus, AttributeModifier.Operation.ADD_VALUE);
 				ensureModifier(player, Attributes.MOVEMENT_SPEED, ENFORCER_SPEED_ID,
 						speedPenalty, AttributeModifier.Operation.ADD_VALUE);
 				ensureModifier(player, Attributes.ATTACK_KNOCKBACK, ENFORCER_KNOCKBACK_RESISTANCE_ID,
-						isGold ? 3.0 : 2.0, AttributeModifier.Operation.ADD_VALUE);
+						knockbackBonus, AttributeModifier.Operation.ADD_VALUE);
 			}
 
 			case HOLLOW_KING -> {
 				// Hollow Circulation: slight damage reduction, passive Madra regen
-				// Madra regen is handled above (drain offset). Damage reduction via Resistance.
 				if (!player.hasEffect(MobEffects.RESISTANCE) || player.getEffect(MobEffects.RESISTANCE).getDuration() < 10) {
-					int amp = isGold ? 1 : 0; // Resistance I (Gold: Resistance II)
+					int amp = powerMult >= 1.5f ? 1 : 0; // Resistance II at Underlord+
 					player.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, 60, amp, false, false));
 				}
 			}
@@ -364,6 +404,86 @@ public final class CyclingManager {
 		}
 	}
 
+	// ── Ruler technique effects ────────────────────────────────────────
+
+	/**
+	 * Applies Ruler area effects to enemies near the player.
+	 * Called every RULER_EFFECT_INTERVAL ticks (0.5 seconds) while Ruler is active.
+	 */
+	private static void applyRulerEffects(ServerPlayer player, CradlePlayerData data) {
+		float powerMult = data.getAbilityPowerMultiplier();
+		AABB area = player.getBoundingBox().inflate(RULER_RADIUS);
+
+		java.util.List<LivingEntity> enemies = player.level().getEntitiesOfClass(
+				LivingEntity.class, area,
+				e -> e != player && e.isAlive() && !e.isAlliedTo(player)
+		);
+
+		if (enemies.isEmpty()) return;
+
+		net.minecraft.server.level.ServerLevel serverLevel = player.level();
+
+		switch (data.getChosenPath()) {
+			case BLACK_FLAME -> {
+				// Domain of Ash: enemies inside burn over time
+				float damage = 2.0f * powerMult;
+				for (LivingEntity e : enemies) {
+					e.hurtServer(serverLevel, player.damageSources().magic(), damage);
+					e.igniteForSeconds(2.0f);
+				}
+			}
+
+			case ENDLESS_SWORD -> {
+				// Field of Blades: enemies moving near take repeated damage
+				float damage = 1.5f * powerMult;
+				for (LivingEntity e : enemies) {
+					double speed = e.getDeltaMovement().horizontalDistance();
+					if (speed > 0.01) {
+						e.hurtServer(serverLevel, player.damageSources().magic(), damage);
+					}
+				}
+			}
+
+			case STELLAR_SPEAR -> {
+				// Spear Domain: enemies moving toward the player take damage
+				float damage = 2.0f * powerMult;
+				for (LivingEntity e : enemies) {
+					net.minecraft.world.phys.Vec3 toPlayer = player.position().subtract(e.position()).normalize();
+					net.minecraft.world.phys.Vec3 movement = e.getDeltaMovement().normalize();
+					double dot = toPlayer.x * movement.x + toPlayer.z * movement.z;
+					if (dot > 0.3) {
+						e.hurtServer(serverLevel, player.damageSources().magic(), damage);
+					}
+				}
+			}
+
+			case CLOUD_HAMMER -> {
+				// Gravity Field: enemies slow + reduced jump
+				int duration = 20;
+				int slowAmp = powerMult >= 1.5f ? 2 : 1; // Slowness III at Underlord+
+				for (LivingEntity e : enemies) {
+					e.addEffect(new MobEffectInstance(MobEffects.SLOWNESS, duration, slowAmp, false, false));
+					e.addEffect(new MobEffectInstance(MobEffects.JUMP_BOOST, duration, 128, false, false));
+				}
+			}
+
+			case HOLLOW_KING -> {
+				// Hollow Domain: damage reduction aura, weaken enemy abilities
+				int duration = 20;
+				int weakAmp = powerMult >= 1.5f ? 1 : 0; // Weakness II at Underlord+
+				for (LivingEntity e : enemies) {
+					e.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, duration, weakAmp, false, false));
+				}
+				if (!player.hasEffect(MobEffects.RESISTANCE) || player.getEffect(MobEffects.RESISTANCE).getDuration() < 10) {
+					int resAmp = powerMult >= 1.5f ? 1 : 0;
+					player.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, 20, resAmp, false, false));
+				}
+			}
+
+			default -> {}
+		}
+	}
+
 	// ── Level-up logic ─────────────────────────────────────────────────
 
 	/**
@@ -408,11 +528,16 @@ public final class CyclingManager {
 				data.getAdvancementStage().name(),
 				data.getCurrentMadra(),
 				data.getMaxMadra(),
-				data.isActivelyCycling(),
-				BreakthroughManager.canAdvance(player, data),
-				data.getIronBody().name(),
-				data.isIronBodyActive(),
-				data.isEnforcerActive()
+				CradleSyncPayload.buildFlags(
+						data.isActivelyCycling(),
+						BreakthroughManager.canAdvance(player, data),
+						data.isIronBodyActive(),
+						data.isEnforcerActive(),
+						data.isRulerActive(),
+						data.hasSage(),
+						data.hasHerald()
+				),
+				data.getIronBody().name()
 		);
 	}
 }

@@ -3,6 +3,7 @@ package com.cradle.mod;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.particles.DustParticleOptions;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.world.level.Level;
 
 import java.util.Random;
@@ -22,16 +23,28 @@ public final class CyclingParticleRenderer {
 
 	private static final Random RANDOM = new Random();
 	private static int tickCounter = 0;
+	private static int rulerTickCounter = 0;
 
 	public static void tick(Minecraft client) {
-		if (!ClientCradleData.cycling) {
+		LocalPlayer player = client.player;
+		Level level = client.level;
+		if (player == null || level == null) {
+			rulerTickCounter = 0;
 			tickCounter = 0;
 			return;
 		}
 
-		LocalPlayer player = client.player;
-		Level level = client.level;
-		if (player == null || level == null) {
+		// ── Ruler aura particles ──────────────────────────────────────
+		if (ClientCradleData.rulerActive) {
+			rulerTickCounter++;
+			tickRulerParticles(level, player);
+		} else {
+			rulerTickCounter = 0;
+		}
+
+		// ── Cycling particles ─────────────────────────────────────────
+		if (!ClientCradleData.cycling) {
+			tickCounter = 0;
 			return;
 		}
 
@@ -113,7 +126,8 @@ public final class CyclingParticleRenderer {
 	 */
 	private static int getSpawnInterval() {
 		return switch (ClientCradleData.stage) {
-			case "GOLD", "JADE" -> 1;
+			case "MONARCH", "HERALD", "SAGE", "ARCHLORD", "OVERLORD", "UNDERLORD" -> 1;
+			case "TRUEGOLD", "HIGH_GOLD", "LOW_GOLD", "JADE" -> 1;
 			case "IRON" -> 1;
 			case "COPPER" -> 2;
 			default -> 4; // Foundation
@@ -125,8 +139,12 @@ public final class CyclingParticleRenderer {
 	 */
 	private static int getParticlesPerSpawn() {
 		return switch (ClientCradleData.stage) {
-			case "GOLD" -> 3;
-			case "JADE" -> 2;
+			case "MONARCH" -> 6;
+			case "HERALD", "SAGE" -> 5;
+			case "ARCHLORD" -> 4;
+			case "OVERLORD", "UNDERLORD" -> 3;
+			case "TRUEGOLD", "HIGH_GOLD" -> 3;
+			case "LOW_GOLD", "JADE" -> 2;
 			default -> 1; // Iron, Copper, Foundation
 		};
 	}
@@ -136,7 +154,14 @@ public final class CyclingParticleRenderer {
 	 */
 	private static float getRadius() {
 		return switch (ClientCradleData.stage) {
-			case "GOLD" -> 4.0f;
+			case "MONARCH" -> 6.0f;
+			case "HERALD", "SAGE" -> 5.5f;
+			case "ARCHLORD" -> 5.0f;
+			case "OVERLORD" -> 4.8f;
+			case "UNDERLORD" -> 4.5f;
+			case "TRUEGOLD" -> 4.0f;
+			case "HIGH_GOLD" -> 3.8f;
+			case "LOW_GOLD" -> 3.5f;
 			case "JADE" -> 3.5f;
 			case "IRON" -> 3.0f;
 			case "COPPER" -> 2.5f;
@@ -149,11 +174,104 @@ public final class CyclingParticleRenderer {
 	 */
 	private static float getScale() {
 		return switch (ClientCradleData.stage) {
-			case "GOLD" -> 1.2f;
+			case "MONARCH" -> 1.8f;
+			case "HERALD", "SAGE" -> 1.6f;
+			case "ARCHLORD" -> 1.5f;
+			case "OVERLORD" -> 1.4f;
+			case "UNDERLORD" -> 1.3f;
+			case "TRUEGOLD" -> 1.2f;
+			case "HIGH_GOLD" -> 1.1f;
+			case "LOW_GOLD" -> 1.0f;
 			case "JADE" -> 1.0f;
 			case "IRON" -> 0.8f;
 			case "COPPER" -> 0.6f;
 			default -> 0.4f; // Foundation
+		};
+	}
+
+	// ── Ruler aura particles ─────────────────────────────────────────
+
+	private static final double RULER_RING_RADIUS = 6.0;
+
+	/**
+	 * Spawns a rotating ring of path-colored particles around the player
+	 * at ground level, showing the Ruler area of effect.
+	 */
+	private static void tickRulerParticles(Level level, LocalPlayer player) {
+		double playerX = player.getX();
+		double playerY = player.getY() + 0.1; // just above ground
+		double playerZ = player.getZ();
+
+		int color = getRulerParticleColor();
+		DustParticleOptions dust = new DustParticleOptions(color, 0.8f);
+
+		// Spawn ring particles — rotating arc each tick for a sweeping effect
+		int particlesPerTick = 4;
+		double baseAngle = (rulerTickCounter * 0.15) % (2 * Math.PI); // rotates over time
+
+		for (int i = 0; i < particlesPerTick; i++) {
+			double angle = baseAngle + (i * 2.0 * Math.PI / particlesPerTick);
+			// Add slight randomness so it doesn't look too mechanical
+			angle += (RANDOM.nextDouble() - 0.5) * 0.3;
+
+			double x = playerX + RULER_RING_RADIUS * Math.cos(angle);
+			double z = playerZ + RULER_RING_RADIUS * Math.sin(angle);
+
+			// Slight upward drift
+			level.addParticle(dust, x, playerY, z, 0, 0.02, 0);
+		}
+
+		// Inner ring at half radius for a denser look
+		if (rulerTickCounter % 2 == 0) {
+			double innerAngle = baseAngle + Math.PI; // offset from outer ring
+			for (int i = 0; i < 2; i++) {
+				double angle = innerAngle + (i * Math.PI);
+				angle += (RANDOM.nextDouble() - 0.5) * 0.4;
+
+				double x = playerX + (RULER_RING_RADIUS * 0.5) * Math.cos(angle);
+				double z = playerZ + (RULER_RING_RADIUS * 0.5) * Math.sin(angle);
+
+				level.addParticle(dust, x, playerY, z, 0, 0.01, 0);
+			}
+		}
+
+		// Path-specific accent particles every few ticks
+		if (rulerTickCounter % 5 == 0) {
+			spawnRulerAccentParticle(level, playerX, playerY, playerZ);
+		}
+	}
+
+	/**
+	 * Spawns path-specific accent particles for Ruler aura flavor.
+	 */
+	private static void spawnRulerAccentParticle(Level level, double px, double py, double pz) {
+		double angle = RANDOM.nextDouble() * 2 * Math.PI;
+		double dist = RANDOM.nextDouble() * RULER_RING_RADIUS;
+		double x = px + dist * Math.cos(angle);
+		double z = pz + dist * Math.sin(angle);
+		double y = py + RANDOM.nextDouble() * 0.5;
+
+		switch (ClientCradleData.path) {
+			case "BLACK_FLAME" -> level.addParticle(ParticleTypes.SMALL_FLAME, x, y, z, 0, 0.03, 0);
+			case "ENDLESS_SWORD" -> level.addParticle(ParticleTypes.CRIT, x, y, z, 0, 0.05, 0);
+			case "STELLAR_SPEAR" -> level.addParticle(ParticleTypes.END_ROD, x, y, z, 0, 0.04, 0);
+			case "CLOUD_HAMMER" -> level.addParticle(ParticleTypes.CLOUD, x, y, z, 0, 0.01, 0);
+			case "HOLLOW_KING" -> level.addParticle(ParticleTypes.ENCHANT, x, y + 1.0, z, 0, -0.05, 0);
+			default -> {}
+		}
+	}
+
+	/**
+	 * Returns the ARGB color for Ruler ring particles based on the current path.
+	 */
+	private static int getRulerParticleColor() {
+		return switch (ClientCradleData.path) {
+			case "BLACK_FLAME" -> 0xFFFF4400;   // fiery orange-red
+			case "ENDLESS_SWORD" -> 0xFFAADDFF;  // icy light blue
+			case "STELLAR_SPEAR" -> 0xFFFFDD44;  // golden
+			case "CLOUD_HAMMER" -> 0xFF6666AA;   // stormy purple-grey
+			case "HOLLOW_KING" -> 0xFFEEEEFF;    // pale white
+			default -> 0xFFC0C0C0;
 		};
 	}
 }

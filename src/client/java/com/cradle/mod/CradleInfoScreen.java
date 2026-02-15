@@ -20,7 +20,7 @@ public class CradleInfoScreen extends Screen {
 
 	// Panel dimensions
 	private static final int PANEL_WIDTH = 220;
-	private static final int PANEL_HEIGHT = 258;
+	private static final int PANEL_HEIGHT = 272;
 
 	// Bar dimensions (for XP and Madra bars inside the panel)
 	private static final int BAR_WIDTH = 180;
@@ -124,6 +124,20 @@ public class CradleInfoScreen extends Screen {
 				graphics.drawString(this.font, enforcerName + " (ON)", panelLeft + 75, y, 0xFF55FF55);
 			} else {
 				graphics.drawString(this.font, enforcerName, panelLeft + 75, y, 0xFF999999);
+			}
+		} else {
+			graphics.drawString(this.font, "None", panelLeft + 75, y, 0xFF999999);
+		}
+		y += 14;
+
+		// Ruler technique
+		graphics.drawString(this.font, "Ruler:", panelLeft + 10, y, 0xFFAAAAAA);
+		if (!"UNSET".equals(ClientCradleData.path)) {
+			String rulerName = ClientCradleData.getRulerTechniqueName();
+			if (ClientCradleData.rulerActive) {
+				graphics.drawString(this.font, rulerName + " (ON)", panelLeft + 75, y, 0xFF55FF55);
+			} else {
+				graphics.drawString(this.font, rulerName, panelLeft + 75, y, 0xFF999999);
 			}
 		} else {
 			graphics.drawString(this.font, "None", panelLeft + 75, y, 0xFF999999);

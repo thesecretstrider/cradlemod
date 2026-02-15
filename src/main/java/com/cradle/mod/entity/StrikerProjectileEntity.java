@@ -45,7 +45,7 @@ public class StrikerProjectileEntity extends AbstractHurtingProjectile {
 	private int ticksAlive = 0;
 	private int pierceCount = 0;
 	private float baseDamage = 8.0f;
-	private boolean isGoldStage = false;
+	private float powerMultiplier = 1.0f;
 
 	// Max lifetime in ticks before auto-discard (prevents eternal projectiles)
 	private static final int MAX_LIFETIME_TICKS = 100; // 5 seconds
@@ -57,31 +57,31 @@ public class StrikerProjectileEntity extends AbstractHurtingProjectile {
 
 	// Server-side spawning constructor
 	public StrikerProjectileEntity(Level level, LivingEntity owner, Vec3 movement,
-								   CradlePlayerData.Path path, boolean goldStage) {
+								   CradlePlayerData.Path path, float powerMult) {
 		super(CradleEntities.STRIKER_PROJECTILE, owner, movement, level);
 		this.entityData.set(PATH, path.name());
-		this.isGoldStage = goldStage;
+		this.powerMultiplier = powerMult;
 
-		// Path-specific tuning
+		// Path-specific base tuning, scaled by powerMultiplier
 		switch (path) {
 			case BLACK_FLAME -> {
-				this.baseDamage = goldStage ? 10.0f : 7.0f;
+				this.baseDamage = 7.0f * powerMult;
 				this.accelerationPower = 0.12;
 			}
 			case ENDLESS_SWORD -> {
-				this.baseDamage = goldStage ? 11.0f : 8.0f;
+				this.baseDamage = 8.0f * powerMult;
 				this.accelerationPower = 0.15;
 			}
 			case STELLAR_SPEAR -> {
-				this.baseDamage = goldStage ? 12.0f : 9.0f;
+				this.baseDamage = 9.0f * powerMult;
 				this.accelerationPower = 0.18;
 			}
 			case CLOUD_HAMMER -> {
-				this.baseDamage = goldStage ? 12.0f : 9.0f;
+				this.baseDamage = 9.0f * powerMult;
 				this.accelerationPower = 0.10;
 			}
 			case HOLLOW_KING -> {
-				this.baseDamage = goldStage ? 10.0f : 7.0f;
+				this.baseDamage = 7.0f * powerMult;
 				this.accelerationPower = 0.08;
 			}
 			default -> this.accelerationPower = 0.1;
@@ -148,7 +148,8 @@ public class StrikerProjectileEntity extends AbstractHurtingProjectile {
 				// Pierce through multiple enemies in a line
 				target.hurtServer(serverLevel, source, baseDamage);
 				pierceCount++;
-				if (pierceCount >= (isGoldStage ? 5 : 3)) {
+				int maxPierce = 3 + (int) ((powerMultiplier - 1.0f) * 4); // 3 at 1.0x, up to 9 at 2.5x
+				if (pierceCount >= maxPierce) {
 					discard();
 				}
 				// Don't discard — continue through
@@ -159,7 +160,8 @@ public class StrikerProjectileEntity extends AbstractHurtingProjectile {
 				float damage = baseDamage * (1.0f - 0.15f * pierceCount);
 				target.hurtServer(serverLevel, source, Math.max(damage, 2.0f));
 				pierceCount++;
-				if (pierceCount >= (isGoldStage ? 6 : 4)) {
+				int maxPierce = 4 + (int) ((powerMultiplier - 1.0f) * 4); // 4 at 1.0x, up to 10 at 2.5x
+				if (pierceCount >= maxPierce) {
 					discard();
 				}
 			}
@@ -168,8 +170,8 @@ public class StrikerProjectileEntity extends AbstractHurtingProjectile {
 				// High damage + massive knockback
 				target.hurtServer(serverLevel, source, baseDamage);
 				if (target instanceof LivingEntity living) {
-					// Launch target upward and backward
-					Vec3 knockback = getDeltaMovement().normalize().scale(isGoldStage ? 2.5 : 1.8);
+					// Launch target upward and backward, scaled by power
+					Vec3 knockback = getDeltaMovement().normalize().scale(1.5 + powerMultiplier * 0.5);
 					living.push(knockback.x, 0.6, knockback.z);
 				}
 				discard();
@@ -179,7 +181,7 @@ public class StrikerProjectileEntity extends AbstractHurtingProjectile {
 				// Moderate damage + weaken enemy (Weakness effect)
 				target.hurtServer(serverLevel, source, baseDamage);
 				if (target instanceof LivingEntity living) {
-					int weakDuration = isGoldStage ? 200 : 100; // 10s or 5s
+					int weakDuration = (int) (100 * powerMultiplier); // 5s at 1.0x, up to 12.5s at 2.5x
 					living.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, weakDuration, 0));
 					living.addEffect(new MobEffectInstance(MobEffects.MINING_FATIGUE, weakDuration, 0));
 				}
@@ -248,7 +250,7 @@ public class StrikerProjectileEntity extends AbstractHurtingProjectile {
 		super.addAdditionalSaveData(output);
 		output.putString("Path", getPathName());
 		output.putFloat("BaseDamage", baseDamage);
-		output.putBoolean("GoldStage", isGoldStage);
+		output.putFloat("PowerMultiplier", powerMultiplier);
 		output.putInt("PierceCount", pierceCount);
 	}
 
@@ -257,7 +259,9 @@ public class StrikerProjectileEntity extends AbstractHurtingProjectile {
 		super.readAdditionalSaveData(input);
 		this.entityData.set(PATH, input.getStringOr("Path", "BLACK_FLAME"));
 		this.baseDamage = input.getFloatOr("BaseDamage", 8.0f);
-		this.isGoldStage = input.getBooleanOr("GoldStage", false);
+		// Migration: old saves had "GoldStage" boolean, new saves use "PowerMultiplier" float
+		this.powerMultiplier = input.getFloatOr("PowerMultiplier",
+				input.getBooleanOr("GoldStage", false) ? 1.1f : 1.0f);
 		this.pierceCount = input.getIntOr("PierceCount", 0);
 	}
 }

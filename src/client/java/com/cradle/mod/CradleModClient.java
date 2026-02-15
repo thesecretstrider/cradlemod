@@ -6,6 +6,8 @@ import com.cradle.mod.network.OpenPathSelectionPayload;
 import com.cradle.mod.network.ToggleIronBodyPayload;
 import com.cradle.mod.network.UseEnforcerPayload;
 import com.cradle.mod.network.UseStrikerPayload;
+import com.cradle.mod.network.UseRulerPayload;
+import com.cradle.mod.network.ToggleCyclingPayload;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.StrikerProjectileRenderer;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -97,6 +99,26 @@ public class CradleModClient implements ClientModInitializer {
 			)
 	);
 
+	// Keybind: press C to toggle Ruler technique
+	private static final KeyMapping RULER_KEYBIND = KeyBindingHelper.registerKeyBinding(
+			new KeyMapping(
+					"key.cradlemod.ruler",
+					InputConstants.Type.KEYSYM,
+					GLFW.GLFW_KEY_C,
+					CRADLE_CATEGORY
+			)
+	);
+
+	// Keybind: press G to toggle cycling
+	private static final KeyMapping CYCLING_KEYBIND = KeyBindingHelper.registerKeyBinding(
+			new KeyMapping(
+					"key.cradlemod.cycling",
+					InputConstants.Type.KEYSYM,
+					GLFW.GLFW_KEY_G,
+					CRADLE_CATEGORY
+			)
+	);
+
 	@Override
 	public void onInitializeClient() {
 		// ── Welcome message ───────────────────────────────────────────
@@ -156,6 +178,12 @@ public class CradleModClient implements ClientModInitializer {
 			}
 			while (STRIKER_KEYBIND.consumeClick()) {
 				ClientPlayNetworking.send(new UseStrikerPayload());
+			}
+			while (RULER_KEYBIND.consumeClick()) {
+				ClientPlayNetworking.send(new UseRulerPayload());
+			}
+			while (CYCLING_KEYBIND.consumeClick()) {
+				ClientPlayNetworking.send(new ToggleCyclingPayload());
 			}
 			CyclingParticleRenderer.tick(client);
 		});

@@ -297,7 +297,8 @@
       "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -v net/minecraft/client/renderer/entity/EntityRendererProvider.class)",
       "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" -v /tmp/net/minecraft/client/renderer/entity/EntityRenderer.class)",
       "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" /tmp/net/minecraft/client/renderer/entity/EntityRenderer.class)",
-      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" /tmp/net/minecraft/client/renderer/entity/state/EntityRenderState.class)"
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap.exe\" /tmp/net/minecraft/client/renderer/entity/state/EntityRenderState.class)",
+      "Bash(./gradlew.bat build:*)"
     ]
   }
 }

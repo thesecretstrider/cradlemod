@@ -62,10 +62,32 @@ public final class CradlePlayerData {
 		COPPER,
 		IRON,
 		JADE,
-		GOLD;
+		LOW_GOLD,
+		HIGH_GOLD,
+		TRUEGOLD,
+		UNDERLORD,
+		OVERLORD,
+		ARCHLORD,
+		SAGE,
+		HERALD,
+		MONARCH;
 
 		public String displayName() {
-			return name().charAt(0) + name().substring(1).toLowerCase();
+			return switch (this) {
+				case FOUNDATION -> "Foundation";
+				case COPPER -> "Copper";
+				case IRON -> "Iron";
+				case JADE -> "Jade";
+				case LOW_GOLD -> "Low Gold";
+				case HIGH_GOLD -> "High Gold";
+				case TRUEGOLD -> "Truegold";
+				case UNDERLORD -> "Underlord";
+				case OVERLORD -> "Overlord";
+				case ARCHLORD -> "Archlord";
+				case SAGE -> "Sage";
+				case HERALD -> "Herald";
+				case MONARCH -> "Monarch";
+			};
 		}
 
 		public AdvancementStage next() {
@@ -120,6 +142,9 @@ public final class CradlePlayerData {
 	private IronBody ironBody;
 	private boolean ironBodyActive;
 	private boolean enforcerActive;
+	private boolean rulerActive;
+	private boolean hasSage;
+	private boolean hasHerald;
 
 	private static final float DEFAULT_MAX_MADRA = 100.0f;
 
@@ -135,6 +160,9 @@ public final class CradlePlayerData {
 		this.ironBody = IronBody.NONE;
 		this.ironBodyActive = false;
 		this.enforcerActive = false;
+		this.rulerActive = false;
+		this.hasSage = false;
+		this.hasHerald = false;
 	}
 
 	// ── Getters / setters ──────────────────────────────────────────────
@@ -227,6 +255,30 @@ public final class CradlePlayerData {
 		this.enforcerActive = enforcerActive;
 	}
 
+	public boolean isRulerActive() {
+		return rulerActive;
+	}
+
+	public void setRulerActive(boolean rulerActive) {
+		this.rulerActive = rulerActive;
+	}
+
+	public boolean hasSage() {
+		return hasSage;
+	}
+
+	public void setHasSage(boolean hasSage) {
+		this.hasSage = hasSage;
+	}
+
+	public boolean hasHerald() {
+		return hasHerald;
+	}
+
+	public void setHasHerald(boolean hasHerald) {
+		this.hasHerald = hasHerald;
+	}
+
 	/**
 	 * Returns the cycling speed multiplier for the current advancement stage.
 	 * Higher stages cycle faster (gain more XP and Madra per tick).
@@ -236,8 +288,54 @@ public final class CradlePlayerData {
 			case FOUNDATION -> 1.0f;
 			case COPPER -> 1.5f;
 			case IRON -> 2.0f;
-			case JADE -> 3.0f;
-			case GOLD -> 5.0f;
+			case JADE -> 2.5f;
+			case LOW_GOLD -> 3.0f;
+			case HIGH_GOLD -> 3.5f;
+			case TRUEGOLD -> 4.0f;
+			case UNDERLORD -> 5.5f;
+			case OVERLORD -> 7.0f;
+			case ARCHLORD -> 9.0f;
+			case SAGE, HERALD -> 12.0f;
+			case MONARCH -> 16.0f;
+		};
+	}
+
+	/**
+	 * Returns the ability power multiplier for the current advancement stage.
+	 * Higher stages deal more damage with techniques. Gold stages are modest —
+	 * the big jump is at Underlord (Lord realm).
+	 */
+	public float getAbilityPowerMultiplier() {
+		return switch (advancementStage) {
+			case FOUNDATION, COPPER, IRON -> 1.0f;
+			case JADE -> 1.05f;
+			case LOW_GOLD -> 1.1f;
+			case HIGH_GOLD -> 1.15f;
+			case TRUEGOLD -> 1.25f;
+			case UNDERLORD -> 1.5f;
+			case OVERLORD -> 1.8f;
+			case ARCHLORD -> 2.0f;
+			case SAGE, HERALD -> 2.2f;
+			case MONARCH -> 2.5f;
+		};
+	}
+
+	/**
+	 * Returns the Madra cost multiplier for the current advancement stage.
+	 * Higher stages spend less Madra per ability use. Gold stages barely
+	 * reduce cost — real discounts start at Underlord.
+	 */
+	public float getMadraCostMultiplier() {
+		return switch (advancementStage) {
+			case FOUNDATION, COPPER, IRON, JADE -> 1.0f;
+			case LOW_GOLD -> 0.95f;
+			case HIGH_GOLD -> 0.9f;
+			case TRUEGOLD -> 0.85f;
+			case UNDERLORD -> 0.75f;
+			case OVERLORD -> 0.65f;
+			case ARCHLORD -> 0.55f;
+			case SAGE, HERALD -> 0.5f;
+			case MONARCH -> 0.4f;
 		};
 	}
 
@@ -253,6 +351,8 @@ public final class CradlePlayerData {
 		tag.putFloat("currentMadra", currentMadra);
 		tag.putFloat("maxMadra", maxMadra);
 		tag.putString("ironBody", ironBody.name());
+		tag.putBoolean("hasSage", hasSage);
+		tag.putBoolean("hasHerald", hasHerald);
 		return tag;
 	}
 
@@ -262,7 +362,12 @@ public final class CradlePlayerData {
 		data.cyclingXp = tag.getIntOr("cyclingXp", 0);
 
 		try {
-			data.advancementStage = AdvancementStage.valueOf(tag.getStringOr("advancementStage", "FOUNDATION"));
+			String stageName = tag.getStringOr("advancementStage", "FOUNDATION");
+			// Migration: old "GOLD" saves become "LOW_GOLD"
+			if ("GOLD".equals(stageName)) {
+				stageName = "LOW_GOLD";
+			}
+			data.advancementStage = AdvancementStage.valueOf(stageName);
 		} catch (IllegalArgumentException e) {
 			data.advancementStage = AdvancementStage.FOUNDATION;
 		}
@@ -285,6 +390,9 @@ public final class CradlePlayerData {
 		} catch (IllegalArgumentException e) {
 			data.ironBody = IronBody.NONE;
 		}
+
+		data.hasSage = tag.getBooleanOr("hasSage", false);
+		data.hasHerald = tag.getBooleanOr("hasHerald", false);
 
 		return data;
 	}

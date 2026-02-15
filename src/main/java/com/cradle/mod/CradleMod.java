@@ -12,6 +12,8 @@ import com.cradle.mod.network.OpenPathSelectionPayload;
 import com.cradle.mod.network.ToggleIronBodyPayload;
 import com.cradle.mod.network.UseEnforcerPayload;
 import com.cradle.mod.network.UseStrikerPayload;
+import com.cradle.mod.network.UseRulerPayload;
+import com.cradle.mod.network.ToggleCyclingPayload;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.StrikerProjectileEntity;
 import net.fabricmc.api.ModInitializer;
@@ -92,6 +94,8 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(ToggleIronBodyPayload.TYPE, ToggleIronBodyPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(UseEnforcerPayload.TYPE, UseEnforcerPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(UseStrikerPayload.TYPE, UseStrikerPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(UseRulerPayload.TYPE, UseRulerPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(ToggleCyclingPayload.TYPE, ToggleCyclingPayload.STREAM_CODEC);
 
 		// Send initial data sync when a player joins, and open path selection if needed
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
@@ -157,6 +161,36 @@ public class CradleMod implements ModInitializer {
 			}
 
 			// Always re-sync so the client updates (button disappears, stage changes, etc.)
+			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
+		});
+
+		// Handle cycling toggle from the client (player pressed G)
+		ServerPlayNetworking.registerGlobalReceiver(ToggleCyclingPayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+
+			if (data.isActivelyCycling()) {
+				CyclingManager.stopCycling(player, data);
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7fYou stop cycling."
+				));
+			} else {
+				// Below Low Gold, can't cycle while a technique is active
+				if (!CyclingManager.canCycleWhileUsingAbilities(data)
+						&& (data.isEnforcerActive() || data.isRulerActive())) {
+					player.sendSystemMessage(Component.literal(
+							"\u00A76[Cradle] \u00A7cYou can't cycle while a technique is active!"
+					));
+					ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
+					return;
+				}
+
+				CyclingManager.startCycling(player, data);
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7fYou begin cycling. Madra flows through you..."
+				));
+			}
+
 			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
 		});
 
@@ -249,6 +283,14 @@ public class CradleMod implements ModInitializer {
 					return;
 				}
 
+				// Below Low Gold, using techniques disrupts cycling
+				if (data.isActivelyCycling() && !CyclingManager.canCycleWhileUsingAbilities(data)) {
+					CyclingManager.stopCycling(player, data);
+					player.sendSystemMessage(Component.literal(
+							"\u00A76[Cradle] \u00A7eYour cycling is disrupted by the technique!"
+					));
+				}
+
 				CyclingManager.activateEnforcer(player, data);
 
 				// Send path-specific activation message
@@ -302,11 +344,16 @@ public class CradleMod implements ModInitializer {
 				return;
 			}
 
-			// Madra cost (Gold stage gets 30% discount)
-			float cost = STRIKER_MADRA_COST;
-			if (data.getAdvancementStage() == CradlePlayerData.AdvancementStage.GOLD) {
-				cost *= 0.7f;
+			// Below Low Gold, using techniques disrupts cycling
+			if (data.isActivelyCycling() && !CyclingManager.canCycleWhileUsingAbilities(data)) {
+				CyclingManager.stopCycling(player, data);
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7eYour cycling is disrupted by the technique!"
+				));
 			}
+
+			// Madra cost (graduated discount by stage)
+			float cost = STRIKER_MADRA_COST * data.getMadraCostMultiplier();
 			if (data.getCurrentMadra() < cost) {
 				player.sendSystemMessage(Component.literal(
 						"\u00A76[Cradle] \u00A7cNot enough Madra! Need \u00A7e" + String.format("%.0f", cost) + "\u00A7c."
@@ -321,10 +368,10 @@ public class CradleMod implements ModInitializer {
 			// Spawn the projectile
 			ServerLevel serverLevel = (ServerLevel) player.level();
 			Vec3 look = player.getLookAngle();
-			boolean isGold = data.getAdvancementStage() == CradlePlayerData.AdvancementStage.GOLD;
+			float powerMult = data.getAbilityPowerMultiplier();
 
 			StrikerProjectileEntity projectile = new StrikerProjectileEntity(
-					serverLevel, player, look, data.getChosenPath(), isGold);
+					serverLevel, player, look, data.getChosenPath(), powerMult);
 
 			// Position at eye height, slightly forward
 			projectile.setPos(
@@ -341,6 +388,65 @@ public class CradleMod implements ModInitializer {
 			);
 
 			// Sync updated Madra to client
+			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
+		});
+
+		// Handle Ruler technique from the client (player pressed C)
+		// Toggles area effect on/off. Requires Copper stage or higher. Drains Madra while active.
+		ServerPlayNetworking.registerGlobalReceiver(UseRulerPayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+
+			if (!data.hasChosenPath() || data.getChosenPath() == CradlePlayerData.Path.UNSET) {
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7cYou haven't chosen a path yet."
+				));
+				return;
+			}
+
+			if (data.getAdvancementStage().ordinal() < CradlePlayerData.AdvancementStage.COPPER.ordinal()) {
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7cRuler techniques require Copper stage or higher."
+				));
+				return;
+			}
+
+			if (data.isRulerActive()) {
+				data.setRulerActive(false);
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A77Ruler technique deactivated."
+				));
+			} else {
+				if (data.getCurrentMadra() <= 0) {
+					player.sendSystemMessage(Component.literal(
+							"\u00A76[Cradle] \u00A7cNot enough Madra to activate Ruler technique!"
+					));
+					return;
+				}
+
+				// Below Low Gold, using techniques disrupts cycling
+				if (data.isActivelyCycling() && !CyclingManager.canCycleWhileUsingAbilities(data)) {
+					CyclingManager.stopCycling(player, data);
+					player.sendSystemMessage(Component.literal(
+							"\u00A76[Cradle] \u00A7eYour cycling is disrupted by the technique!"
+					));
+				}
+
+				data.setRulerActive(true);
+
+				String techniqueName = switch (data.getChosenPath()) {
+					case BLACK_FLAME -> "Domain of Ash";
+					case ENDLESS_SWORD -> "Field of Blades";
+					case STELLAR_SPEAR -> "Spear Domain";
+					case CLOUD_HAMMER -> "Gravity Field";
+					case HOLLOW_KING -> "Hollow Domain";
+					default -> "Ruler Technique";
+				};
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7a" + techniqueName + " activated!"
+				));
+			}
+
 			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
 		});
 
@@ -400,6 +506,8 @@ public class CradleMod implements ModInitializer {
 				if (data.isEnforcerActive()) {
 					CyclingManager.deactivateEnforcer(player, data);
 				}
+				// Deactivate ruler
+				data.setRulerActive(false);
 				// Deactivate iron body toggle
 				data.setIronBodyActive(false);
 				// Stop cycling

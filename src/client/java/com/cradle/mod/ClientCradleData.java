@@ -22,6 +22,9 @@ public final class ClientCradleData {
 	public static String ironBody = "NONE";
 	public static boolean ironBodyActive = false;
 	public static boolean enforcerActive = false;
+	public static boolean rulerActive = false;
+	public static boolean hasSage = false;
+	public static boolean hasHerald = false;
 
 	/**
 	 * Reset all client data to defaults. Called when disconnecting from a world
@@ -40,6 +43,9 @@ public final class ClientCradleData {
 		ironBody = "NONE";
 		ironBodyActive = false;
 		enforcerActive = false;
+		rulerActive = false;
+		hasSage = false;
+		hasHerald = false;
 	}
 
 	public static void update(CradleSyncPayload payload) {
@@ -55,6 +61,9 @@ public final class ClientCradleData {
 		ironBody = payload.ironBody();
 		ironBodyActive = payload.ironBodyActive();
 		enforcerActive = payload.enforcerActive();
+		rulerActive = payload.rulerActive();
+		hasSage = payload.hasSage();
+		hasHerald = payload.hasHerald();
 	}
 
 	/**
@@ -66,7 +75,15 @@ public final class ClientCradleData {
 			case "COPPER" -> 0xFFB87333;
 			case "IRON" -> 0xFF71797E;
 			case "JADE" -> 0xFF00A86B;
-			case "GOLD" -> 0xFFFFD700;
+			case "LOW_GOLD" -> 0xFFCCAA00;
+			case "HIGH_GOLD" -> 0xFFFFD700;
+			case "TRUEGOLD" -> 0xFFFFE866;
+			case "UNDERLORD" -> 0xFF6A0DAD;
+			case "OVERLORD" -> 0xFFAA33FF;
+			case "ARCHLORD" -> 0xFFFF4500;
+			case "SAGE" -> 0xFF00B3B3;
+			case "HERALD" -> 0xFFCC1166;
+			case "MONARCH" -> 0xFFFFFFFF;
 			default -> 0xFFC0C0C0; // Foundation / unknown = light grey
 		};
 	}
@@ -80,7 +97,15 @@ public final class ClientCradleData {
 			case "COPPER" -> "Copper";
 			case "IRON" -> "Iron";
 			case "JADE" -> "Jade";
-			case "GOLD" -> "Gold";
+			case "LOW_GOLD" -> "Low Gold";
+			case "HIGH_GOLD" -> "High Gold";
+			case "TRUEGOLD" -> "Truegold";
+			case "UNDERLORD" -> "Underlord";
+			case "OVERLORD" -> "Overlord";
+			case "ARCHLORD" -> "Archlord";
+			case "SAGE" -> "Sage";
+			case "HERALD" -> "Herald";
+			case "MONARCH" -> "Monarch";
 			default -> stage;
 		};
 	}
@@ -101,7 +126,9 @@ public final class ClientCradleData {
 	}
 
 	/**
-	 * Returns the level needed for the next breakthrough, or -1 if at max stage (Gold).
+	 * Returns the level needed for the next breakthrough.
+	 * Returns -1 if at max stage (Monarch).
+	 * Returns -2 if the player needs to choose Sage or Herald (at Archlord with level met).
 	 */
 	public static int getNextBreakthroughLevel() {
 		return switch (stage) {
@@ -109,7 +136,22 @@ public final class ClientCradleData {
 			case "COPPER" -> 25;
 			case "IRON" -> 50;
 			case "JADE" -> 100;
-			default -> -1; // GOLD or unknown = max stage
+			case "LOW_GOLD" -> 130;
+			case "HIGH_GOLD" -> 165;
+			case "TRUEGOLD" -> 200;
+			case "UNDERLORD" -> 250;
+			case "OVERLORD" -> 300;
+			case "ARCHLORD" -> {
+				// At Archlord, player must choose Sage or Herald
+				// -2 signals the UI to show choice buttons instead of advance
+				if (!hasSage && !hasHerald) yield -2;
+				// If they've already picked one (shouldn't normally be at Archlord still), show 350
+				else yield 350;
+			}
+			case "SAGE" -> hasHerald ? 400 : 350; // needs Herald (350) or Monarch (400)
+			case "HERALD" -> hasSage ? 400 : 350;  // needs Sage (350) or Monarch (400)
+			case "MONARCH" -> -1;
+			default -> -1;
 		};
 	}
 
@@ -147,6 +189,20 @@ public final class ClientCradleData {
 			case "STELLAR_SPEAR" -> "Stellar Alignment";
 			case "CLOUD_HAMMER" -> "Thunderous Weight";
 			case "HOLLOW_KING" -> "Hollow Circulation";
+			default -> "None";
+		};
+	}
+
+	/**
+	 * Returns the name of the Ruler technique for the current path.
+	 */
+	public static String getRulerTechniqueName() {
+		return switch (path) {
+			case "BLACK_FLAME" -> "Domain of Ash";
+			case "ENDLESS_SWORD" -> "Field of Blades";
+			case "STELLAR_SPEAR" -> "Spear Domain";
+			case "CLOUD_HAMMER" -> "Gravity Field";
+			case "HOLLOW_KING" -> "Hollow Domain";
 			default -> "None";
 		};
 	}

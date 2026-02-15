@@ -10,11 +10,12 @@ import net.minecraft.world.item.ItemStack;
  * Handles advancement stage breakthroughs. When a player reaches the
  * required level AND has the required items, they break through to the next stage.
  *
- * Item requirements:
- *   Foundation -> Copper: 5 Vital Fruits
- *   Copper -> Iron:       5 Spirit Fruits
- *   Iron -> Jade:         1 Spirit Stone (from dungeon chests)
- *   Jade -> Gold:         Level only (placeholder for Remnant mob later)
+ * Progression: Foundation → Copper → Iron → Jade → Low Gold → High Gold → Truegold
+ *              → Underlord → Overlord → Archlord → (Sage or Herald) → (the other) → Monarch
+ *
+ * After Archlord, the player must choose Sage or Herald first.
+ * After achieving one, they can advance to the other.
+ * After achieving both, they advance to Monarch.
  */
 public final class BreakthroughManager {
 
@@ -28,7 +29,14 @@ public final class BreakthroughManager {
 			case COPPER -> 10;
 			case IRON -> 25;
 			case JADE -> 50;
-			case GOLD -> 100;
+			case LOW_GOLD -> 100;
+			case HIGH_GOLD -> 130;
+			case TRUEGOLD -> 165;
+			case UNDERLORD -> 200;
+			case OVERLORD -> 250;
+			case ARCHLORD -> 300;
+			case SAGE, HERALD -> 350;
+			case MONARCH -> 400;
 			default -> Integer.MAX_VALUE;
 		};
 	}
@@ -41,7 +49,7 @@ public final class BreakthroughManager {
 			case COPPER -> CradleItems.VITAL_FRUIT;
 			case IRON -> CradleItems.SPIRIT_FRUIT;
 			case JADE -> CradleItems.SPIRIT_STONE;
-			case GOLD -> null; // Placeholder for Remnant mob drop later
+			// Underlord/Overlord/Archlord will require Revelation items (added in Step 11)
 			default -> null;
 		};
 	}
@@ -54,7 +62,6 @@ public final class BreakthroughManager {
 			case COPPER -> 5;  // 5 Vital Fruits
 			case IRON -> 5;    // 5 Spirit Fruits
 			case JADE -> 1;    // 1 Spirit Stone
-			case GOLD -> 0;    // No item (placeholder)
 			default -> 0;
 		};
 	}
@@ -79,10 +86,75 @@ public final class BreakthroughManager {
 			case COPPER -> 200f;
 			case IRON -> 400f;
 			case JADE -> 800f;
-			case GOLD -> 1500f;
+			case LOW_GOLD -> 1200f;
+			case HIGH_GOLD -> 1500f;
+			case TRUEGOLD -> 2000f;
+			case UNDERLORD -> 3000f;
+			case OVERLORD -> 4000f;
+			case ARCHLORD -> 5500f;
+			case SAGE, HERALD -> 4000f;
+			case MONARCH -> 8000f;
 			default -> 0f;
 		};
 	}
+
+	// ── Sage/Herald branching logic ──────────────────────────────────
+
+	/**
+	 * Determines the next advancement stage for the given player data,
+	 * accounting for the Sage/Herald branching after Archlord.
+	 *
+	 * After Archlord:
+	 *   - If neither Sage nor Herald chosen: returns null (player must choose via UI)
+	 *   - If has Sage but not Herald: next is HERALD
+	 *   - If has Herald but not Sage: next is SAGE
+	 *   - If has both: next is MONARCH
+	 * At Sage: returns Herald (or Monarch if hasHerald)
+	 * At Herald: returns Sage (or Monarch if hasSage)
+	 * At Monarch: returns null (max stage)
+	 * For all other stages: linear progression via next()
+	 */
+	public static CradlePlayerData.AdvancementStage getNextStage(CradlePlayerData data) {
+		CradlePlayerData.AdvancementStage current = data.getAdvancementStage();
+
+		if (current == CradlePlayerData.AdvancementStage.MONARCH) {
+			return null; // Already at max
+		}
+
+		if (current == CradlePlayerData.AdvancementStage.ARCHLORD) {
+			// Branching: player must choose Sage or Herald
+			if (!data.hasSage() && !data.hasHerald()) {
+				return null; // Needs to choose via UI — handled by ChooseSageHeraldPayload
+			}
+			if (data.hasSage() && !data.hasHerald()) {
+				return CradlePlayerData.AdvancementStage.HERALD;
+			}
+			if (data.hasHerald() && !data.hasSage()) {
+				return CradlePlayerData.AdvancementStage.SAGE;
+			}
+			// Has both — next is Monarch
+			return CradlePlayerData.AdvancementStage.MONARCH;
+		}
+
+		if (current == CradlePlayerData.AdvancementStage.SAGE) {
+			if (data.hasHerald()) {
+				return CradlePlayerData.AdvancementStage.MONARCH;
+			}
+			return CradlePlayerData.AdvancementStage.HERALD;
+		}
+
+		if (current == CradlePlayerData.AdvancementStage.HERALD) {
+			if (data.hasSage()) {
+				return CradlePlayerData.AdvancementStage.MONARCH;
+			}
+			return CradlePlayerData.AdvancementStage.SAGE;
+		}
+
+		// Linear progression for all other stages
+		return current.next();
+	}
+
+	// ── Inventory helpers ────────────────────────────────────────────
 
 	/**
 	 * Counts how many of the given item the player has in their inventory.
@@ -114,20 +186,19 @@ public final class BreakthroughManager {
 		}
 	}
 
+	// ── Breakthrough checks ──────────────────────────────────────────
+
 	/**
 	 * Check if the player qualifies for a breakthrough after leveling up.
 	 * Only NOTIFIES the player when they reach the required level — does NOT
-	 * auto-advance. The player must use the "Advance" button (Phase 9D) to
-	 * actually break through.
+	 * auto-advance. The player must use the "Advance" button to actually break through.
 	 */
 	public static void checkBreakthrough(ServerPlayer player, CradlePlayerData data) {
-		CradlePlayerData.AdvancementStage currentStage = data.getAdvancementStage();
-
-		if (!currentStage.hasNext()) {
-			return; // Already at max stage (Gold)
+		CradlePlayerData.AdvancementStage nextStage = getNextStage(data);
+		if (nextStage == null) {
+			return; // At max or needs Sage/Herald choice
 		}
 
-		CradlePlayerData.AdvancementStage nextStage = currentStage.next();
 		int requiredLevel = getLevelForStage(nextStage);
 
 		// Only notify once when they first reach the required level
@@ -155,16 +226,15 @@ public final class BreakthroughManager {
 	 * Returns true if the player meets ALL requirements to advance to the next stage:
 	 * - Has the required level
 	 * - Has the required items in inventory
+	 * - For Sage/Herald branching: a choice has been made (getNextStage returns non-null)
 	 */
 	public static boolean canAdvance(ServerPlayer player, CradlePlayerData data) {
-		CradlePlayerData.AdvancementStage currentStage = data.getAdvancementStage();
-		if (!currentStage.hasNext()) {
+		CradlePlayerData.AdvancementStage nextStage = getNextStage(data);
+		if (nextStage == null) {
 			return false;
 		}
 
-		CradlePlayerData.AdvancementStage nextStage = currentStage.next();
 		int requiredLevel = getLevelForStage(nextStage);
-
 		if (data.getPlayerLevel() < requiredLevel) {
 			return false;
 		}
@@ -183,7 +253,7 @@ public final class BreakthroughManager {
 
 	/**
 	 * Actually perform the breakthrough: consume items, advance stage, boost stats.
-	 * Called when the player presses the "Advance" button (Phase 9D).
+	 * Called when the player presses the "Advance" button.
 	 * Returns true if the breakthrough was successful.
 	 */
 	public static boolean attemptBreakthrough(ServerPlayer player, CradlePlayerData data) {
@@ -191,7 +261,8 @@ public final class BreakthroughManager {
 			return false;
 		}
 
-		CradlePlayerData.AdvancementStage nextStage = data.getAdvancementStage().next();
+		CradlePlayerData.AdvancementStage nextStage = getNextStage(data);
+		if (nextStage == null) return false;
 
 		// Consume required items
 		Item requiredItem = getRequiredItem(nextStage);
@@ -220,6 +291,13 @@ public final class BreakthroughManager {
 						"\u00A76[Cradle] \u00A77You advance without an Iron Body."
 				));
 			}
+		}
+
+		// Track Sage/Herald achievement
+		if (nextStage == CradlePlayerData.AdvancementStage.SAGE) {
+			data.setHasSage(true);
+		} else if (nextStage == CradlePlayerData.AdvancementStage.HERALD) {
+			data.setHasHerald(true);
 		}
 
 		// Advance stage
@@ -287,13 +365,24 @@ public final class BreakthroughManager {
 	}
 
 	/**
-	 * Returns the level needed for the next breakthrough, or -1 if at max stage.
-	 * Used by the client-side info screen.
+	 * Returns the level needed for the next breakthrough, or -1 if at max stage,
+	 * or -2 if the player needs to make a Sage/Herald choice first.
+	 * Now takes CradlePlayerData instead of AdvancementStage because it needs
+	 * the hasSage/hasHerald flags for branching.
 	 */
-	public static int getNextBreakthroughLevel(CradlePlayerData.AdvancementStage currentStage) {
-		if (!currentStage.hasNext()) {
-			return -1;
+	public static int getNextBreakthroughLevel(CradlePlayerData data) {
+		CradlePlayerData.AdvancementStage current = data.getAdvancementStage();
+
+		// At Archlord with no choice made = needs Sage/Herald selection
+		if (current == CradlePlayerData.AdvancementStage.ARCHLORD
+				&& !data.hasSage() && !data.hasHerald()) {
+			return -2; // Signal: needs choice
 		}
-		return getLevelForStage(currentStage.next());
+
+		CradlePlayerData.AdvancementStage nextStage = getNextStage(data);
+		if (nextStage == null) {
+			return -1; // Max stage
+		}
+		return getLevelForStage(nextStage);
 	}
 }
