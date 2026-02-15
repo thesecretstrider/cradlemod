@@ -163,26 +163,31 @@ public final class CyclingManager {
 				}
 			}
 
-			// Active cycling: faster XP + Madra gain, but must stand still
+			// Active cycling: faster XP + Madra gain, but must stand still (unless Herald)
 			if (data.isActivelyCycling()) {
 				// Check for movement — if player moved, stop cycling
-				double[] startPos = CYCLING_POSITIONS.get(playerId);
-				if (startPos != null) {
-					double dx = Math.abs(player.getX() - startPos[0]);
-					double dz = Math.abs(player.getZ() - startPos[1]);
-					if (dx > MOVE_THRESHOLD || dz > MOVE_THRESHOLD) {
-						stopCycling(player, data);
-						player.sendSystemMessage(Component.literal(
-								"§6[Cradle] §fYou moved and stopped cycling."
-						));
-						// Still send sync this tick so client sees the change
-						ServerPlayNetworking.send(player, createSyncPayload(player, data));
-						continue;
+				// Herald can cycle while moving (body transcends physical limits)
+				if (!canCycleWhileMoving(data)) {
+					double[] startPos = CYCLING_POSITIONS.get(playerId);
+					if (startPos != null) {
+						double dx = Math.abs(player.getX() - startPos[0]);
+						double dz = Math.abs(player.getZ() - startPos[1]);
+						if (dx > MOVE_THRESHOLD || dz > MOVE_THRESHOLD) {
+							stopCycling(player, data);
+							player.sendSystemMessage(Component.literal(
+									"§6[Cradle] §fYou moved and stopped cycling."
+							));
+							// Still send sync this tick so client sees the change
+							ServerPlayNetworking.send(player, createSyncPayload(player, data));
+							continue;
+						}
 					}
 				}
 
-				// Prevent sprinting while cycling
-				player.setSprinting(false);
+				// Prevent sprinting while cycling (unless Herald)
+				if (!canCycleWhileMoving(data)) {
+					player.setSprinting(false);
+				}
 
 				// Glowing outline while cycling (refreshed every tick, 40 ticks duration as safety buffer)
 				player.addEffect(new MobEffectInstance(MobEffects.GLOWING, 40, 0, false, false));
@@ -227,7 +232,18 @@ public final class CyclingManager {
 	 * At Low Gold and above, the player has mastered their madra flow.
 	 */
 	public static boolean canCycleWhileUsingAbilities(CradlePlayerData data) {
-		return data.getAdvancementStage().ordinal() >= CradlePlayerData.AdvancementStage.LOW_GOLD.ordinal();
+		// Underlord+ has mastered their madra flow — can cycle while using abilities
+		// Sage has perfect aura control — always allowed
+		if (data.hasSage()) return true;
+		return data.getAdvancementStage().ordinal() >= CradlePlayerData.AdvancementStage.UNDERLORD.ordinal();
+	}
+
+	/**
+	 * Whether the player can cycle while moving.
+	 * Herald's body transcends physical limits — no need to sit still.
+	 */
+	public static boolean canCycleWhileMoving(CradlePlayerData data) {
+		return data.hasHerald();
 	}
 
 	// ── Cycling start/stop ────────────────────────────────────────────
