@@ -1,6 +1,7 @@
 package com.cradle.mod;
 
 import com.cradle.mod.network.AttemptAdvancePayload;
+import com.cradle.mod.network.ChooseSageHeraldPayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -20,7 +21,7 @@ public class CradleInfoScreen extends Screen {
 
 	// Panel dimensions
 	private static final int PANEL_WIDTH = 220;
-	private static final int PANEL_HEIGHT = 272;
+	private static final int PANEL_HEIGHT = 302;
 
 	// Bar dimensions (for XP and Madra bars inside the panel)
 	private static final int BAR_WIDTH = 180;
@@ -33,6 +34,13 @@ public class CradleInfoScreen extends Screen {
 	// Button position (calculated during render)
 	private int advBtnX, advBtnY;
 	private boolean advBtnHovered = false;
+
+	// Sage/Herald choice button positions
+	private int sageBtnX, sageBtnY;
+	private int heraldBtnX, heraldBtnY;
+	private boolean sageBtnHovered = false;
+	private boolean heraldBtnHovered = false;
+	private boolean showingChoice = false;
 
 	public CradleInfoScreen() {
 		super(Component.literal("Sacred Artist Status"));
@@ -87,7 +95,9 @@ public class CradleInfoScreen extends Screen {
 		// Next breakthrough
 		int nextBreakthrough = ClientCradleData.getNextBreakthroughLevel();
 		graphics.drawString(this.font, "Next:", panelLeft + 10, y, 0xFFAAAAAA);
-		if (nextBreakthrough > 0) {
+		if (nextBreakthrough == -2) {
+			graphics.drawString(this.font, "Choose: Sage or Herald", panelLeft + 60, y, 0xFFDD99FF);
+		} else if (nextBreakthrough > 0) {
 			graphics.drawString(this.font, "Level " + nextBreakthrough, panelLeft + 60, y, 0xFFDD99FF);
 		} else {
 			graphics.drawString(this.font, "Max stage reached", panelLeft + 60, y, 0xFFFFD700);
@@ -183,8 +193,47 @@ public class CradleInfoScreen extends Screen {
 		}
 		y += BAR_HEIGHT + 10;
 
-		// ── Advance button (only shown when player can advance) ──────────
-		if (ClientCradleData.canAdvance) {
+		// ── Sage/Herald choice or Advance button ──────────────────────
+		showingChoice = false;
+
+		// Show Sage/Herald choice when at Archlord, level met, no choice yet
+		if (nextBreakthrough == -2 && ClientCradleData.level >= 350) {
+			showingChoice = true;
+
+			// "Choose your path beyond Archlord:" label
+			graphics.drawCenteredString(this.font, "Choose your path beyond Archlord:",
+					centerX, y, 0xFFDD99FF);
+			y += 14;
+
+			int choiceBtnWidth = 95;
+
+			// Sage button (left)
+			sageBtnX = centerX - choiceBtnWidth - 4;
+			sageBtnY = y;
+			sageBtnHovered = mouseX >= sageBtnX && mouseX <= sageBtnX + choiceBtnWidth
+					&& mouseY >= sageBtnY && mouseY <= sageBtnY + BUTTON_HEIGHT;
+
+			graphics.fill(sageBtnX - 1, sageBtnY - 1, sageBtnX + choiceBtnWidth + 1, sageBtnY + BUTTON_HEIGHT + 1, 0xFF00B3B3);
+			int sageBg = sageBtnHovered ? 0xFF1A3A3A : 0xFF0A2A2A;
+			graphics.fill(sageBtnX, sageBtnY, sageBtnX + choiceBtnWidth, sageBtnY + BUTTON_HEIGHT, sageBg);
+			int sageText = sageBtnHovered ? 0xFF55FFFF : 0xFF00B3B3;
+			graphics.drawCenteredString(this.font, "\u2728 Become Sage", sageBtnX + choiceBtnWidth / 2, sageBtnY + 6, sageText);
+
+			// Herald button (right)
+			heraldBtnX = centerX + 4;
+			heraldBtnY = y;
+			heraldBtnHovered = mouseX >= heraldBtnX && mouseX <= heraldBtnX + choiceBtnWidth
+					&& mouseY >= heraldBtnY && mouseY <= heraldBtnY + BUTTON_HEIGHT;
+
+			graphics.fill(heraldBtnX - 1, heraldBtnY - 1, heraldBtnX + choiceBtnWidth + 1, heraldBtnY + BUTTON_HEIGHT + 1, 0xFFCC1166);
+			int heraldBg = heraldBtnHovered ? 0xFF3A1A2A : 0xFF2A0A1A;
+			graphics.fill(heraldBtnX, heraldBtnY, heraldBtnX + choiceBtnWidth, heraldBtnY + BUTTON_HEIGHT, heraldBg);
+			int heraldText = heraldBtnHovered ? 0xFFFF66AA : 0xFFCC1166;
+			graphics.drawCenteredString(this.font, "\u2728 Become Herald", heraldBtnX + choiceBtnWidth / 2, heraldBtnY + 6, heraldText);
+
+			advBtnHovered = false;
+		} else if (ClientCradleData.canAdvance) {
+			// Standard advance button
 			advBtnX = centerX - BUTTON_WIDTH / 2;
 			advBtnY = y;
 
@@ -204,6 +253,8 @@ public class CradleInfoScreen extends Screen {
 			graphics.drawCenteredString(this.font, "\u2B06 Advance \u2B06", centerX, advBtnY + 6, textColor);
 		} else {
 			advBtnHovered = false;
+			sageBtnHovered = false;
+			heraldBtnHovered = false;
 		}
 
 		// Hint at the bottom
@@ -215,12 +266,24 @@ public class CradleInfoScreen extends Screen {
 
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean bl) {
-		if (event.button() == 0 && ClientCradleData.canAdvance && advBtnHovered) {
-			// Send advancement request to server
-			ClientPlayNetworking.send(new AttemptAdvancePayload());
-			// Close the screen so the player sees the breakthrough messages in chat
-			this.onClose();
-			return true;
+		if (event.button() == 0) {
+			// Sage/Herald choice buttons
+			if (showingChoice && sageBtnHovered) {
+				ClientPlayNetworking.send(new ChooseSageHeraldPayload("SAGE"));
+				this.onClose();
+				return true;
+			}
+			if (showingChoice && heraldBtnHovered) {
+				ClientPlayNetworking.send(new ChooseSageHeraldPayload("HERALD"));
+				this.onClose();
+				return true;
+			}
+			// Standard advance button
+			if (ClientCradleData.canAdvance && advBtnHovered) {
+				ClientPlayNetworking.send(new AttemptAdvancePayload());
+				this.onClose();
+				return true;
+			}
 		}
 		return super.mouseClicked(event, bl);
 	}

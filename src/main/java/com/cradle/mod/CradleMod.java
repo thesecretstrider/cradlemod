@@ -14,6 +14,7 @@ import com.cradle.mod.network.UseEnforcerPayload;
 import com.cradle.mod.network.UseStrikerPayload;
 import com.cradle.mod.network.UseRulerPayload;
 import com.cradle.mod.network.ToggleCyclingPayload;
+import com.cradle.mod.network.ChooseSageHeraldPayload;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.StrikerProjectileEntity;
 import net.fabricmc.api.ModInitializer;
@@ -96,6 +97,7 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(UseStrikerPayload.TYPE, UseStrikerPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(UseRulerPayload.TYPE, UseRulerPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(ToggleCyclingPayload.TYPE, ToggleCyclingPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(ChooseSageHeraldPayload.TYPE, ChooseSageHeraldPayload.STREAM_CODEC);
 
 		// Send initial data sync when a player joins, and open path selection if needed
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
@@ -161,6 +163,64 @@ public class CradleMod implements ModInitializer {
 			}
 
 			// Always re-sync so the client updates (button disappears, stage changes, etc.)
+			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
+		});
+
+		// Handle Sage/Herald choice from the client (player clicked "Become Sage" or "Become Herald")
+		ServerPlayNetworking.registerGlobalReceiver(ChooseSageHeraldPayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+
+			// Validate: must be at Archlord stage
+			if (data.getAdvancementStage() != CradlePlayerData.AdvancementStage.ARCHLORD) {
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7cYou must be at Archlord to make this choice."
+				));
+				return;
+			}
+
+			// Validate: must have reached level requirement
+			if (data.getPlayerLevel() < 350) {
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7cYou must reach Level 350 to advance beyond Archlord."
+				));
+				return;
+			}
+
+			// Validate: hasn't already chosen
+			if (data.hasSage() || data.hasHerald()) {
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7cYou have already made your choice."
+				));
+				return;
+			}
+
+			// Validate choice string
+			String choice = payload.choice();
+			if ("SAGE".equals(choice)) {
+				data.setHasSage(true);
+				data.setAdvancementStage(CradlePlayerData.AdvancementStage.SAGE);
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7b\u2728 You have touched the Way and become a Sage! \u2728"
+				));
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7fReality bends to your will. The Authority is yours to command."
+				));
+			} else if ("HERALD".equals(choice)) {
+				data.setHasHerald(true);
+				data.setAdvancementStage(CradlePlayerData.AdvancementStage.HERALD);
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7d\u2728 Your body transcends mortal limits! You are now a Herald! \u2728"
+				));
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7fYour physical form is reforged. Mountains tremble at your strength."
+				));
+			} else {
+				return; // Invalid choice — ignore
+			}
+
+			// Save and sync
+			autoSave(player.level().getServer());
 			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
 		});
 
