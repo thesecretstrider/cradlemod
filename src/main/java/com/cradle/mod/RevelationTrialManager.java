@@ -46,6 +46,7 @@ public final class RevelationTrialManager {
 		public final UUID playerId;
 		public final CradlePlayerData.AdvancementStage targetStage;
 		public final List<UUID> spiritIds;
+		public final Set<UUID> confirmedKills; // spirits we've confirmed dead
 		public final double originX, originY, originZ;
 
 		public RevelationTrial(UUID playerId, CradlePlayerData.AdvancementStage targetStage,
@@ -53,6 +54,7 @@ public final class RevelationTrialManager {
 			this.playerId = playerId;
 			this.targetStage = targetStage;
 			this.spiritIds = new ArrayList<>();
+			this.confirmedKills = new HashSet<>();
 			this.originX = originX;
 			this.originY = originY;
 			this.originZ = originZ;
@@ -153,18 +155,20 @@ public final class RevelationTrialManager {
 				continue;
 			}
 
-			// Count how many spirits are still alive
+			// Check spirits: update confirmed kills and count remaining
 			ServerLevel serverLevel = player.level();
-			int aliveCount = 0;
 			for (UUID spiritId : trial.spiritIds) {
+				if (trial.confirmedKills.contains(spiritId)) continue; // already confirmed dead
 				var entity = serverLevel.getEntity(spiritId);
-				if (entity != null && entity.isAlive()) {
-					aliveCount++;
+				if (entity != null && !entity.isAlive()) {
+					// Entity exists and is dead — confirm kill
+					trial.confirmedKills.add(spiritId);
 				}
+				// If entity is null, it's in unloaded chunks — NOT dead
 			}
 
-			// All spirits dead = trial complete!
-			if (aliveCount == 0) {
+			// All spirits confirmed killed = trial complete!
+			if (trial.confirmedKills.size() >= trial.spiritIds.size()) {
 				completeTrial(player, trial);
 			}
 		}
