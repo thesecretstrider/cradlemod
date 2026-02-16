@@ -20,6 +20,7 @@ import com.cradle.mod.entity.StrikerProjectileEntity;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerEntityCombatEvents;
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -543,9 +544,17 @@ public class CradleMod implements ModInitializer {
 		// Crystal spawn manager — checks weather conditions for Iron Body crystal spawns
 		ServerTickEvents.END_SERVER_TICK.register(CrystalSpawnManager::onServerTick);
 
+		// Revelation trial manager — checks trial progress (spirit kills, distance leash)
+		ServerTickEvents.END_SERVER_TICK.register(RevelationTrialManager::onServerTick);
+
 		// Bloodforged crystal — chance to spawn when a player kills a mob
 		ServerEntityCombatEvents.AFTER_KILLED_OTHER_ENTITY.register((level, attacker, killed, damageSource) -> {
 			CrystalSpawnManager.onEntityKilled(level, attacker, killed);
+		});
+
+		// Player death — fail active revelation trial if the player dies
+		ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
+			RevelationTrialManager.onEntityDeath(entity);
 		});
 
 		// Auto-save player data periodically (every 5 minutes)
@@ -575,6 +584,8 @@ public class CradleMod implements ModInitializer {
 					CyclingManager.stopCycling(player, data);
 				}
 			}
+			// Cancel any active revelation trial (cleanup spirits)
+			RevelationTrialManager.cancelTrial(player.getUUID());
 			autoSave(server);
 		});
 

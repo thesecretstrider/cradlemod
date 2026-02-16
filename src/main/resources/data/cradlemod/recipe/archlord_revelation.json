@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    "cradlemod:spirit_stone",
+    "minecraft:heart_of_the_sea",
+    "minecraft:totem_of_undying"
+  ],
+  "result": {
+    "id": "cradlemod:archlord_revelation",
+    "count": 1
+  }
+}

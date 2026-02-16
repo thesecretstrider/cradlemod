@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    "cradlemod:spirit_stone",
+    "minecraft:echo_shard",
+    "minecraft:dragon_breath"
+  ],
+  "result": {
+    "id": "cradlemod:overlord_revelation",
+    "count": 1
+  }
+}

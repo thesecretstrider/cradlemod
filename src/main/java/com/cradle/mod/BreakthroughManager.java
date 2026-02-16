@@ -49,7 +49,9 @@ public final class BreakthroughManager {
 			case COPPER -> CradleItems.VITAL_FRUIT;
 			case IRON -> CradleItems.SPIRIT_FRUIT;
 			case JADE -> CradleItems.SPIRIT_STONE;
-			// Underlord/Overlord/Archlord will require Revelation items (added in Step 11)
+			case UNDERLORD -> CradleItems.UNDERLORD_REVELATION;
+			case OVERLORD -> CradleItems.OVERLORD_REVELATION;
+			case ARCHLORD -> CradleItems.ARCHLORD_REVELATION;
 			default -> null;
 		};
 	}
@@ -62,6 +64,9 @@ public final class BreakthroughManager {
 			case COPPER -> 5;  // 5 Vital Fruits
 			case IRON -> 5;    // 5 Spirit Fruits
 			case JADE -> 1;    // 1 Spirit Stone
+			case UNDERLORD -> 1; // 1 Underlord Revelation
+			case OVERLORD -> 1;  // 1 Overlord Revelation
+			case ARCHLORD -> 1;  // 1 Archlord Revelation
 			default -> 0;
 		};
 	}
@@ -74,6 +79,9 @@ public final class BreakthroughManager {
 			case COPPER -> "Vital Fruit";
 			case IRON -> "Spirit Fruit";
 			case JADE -> "Spirit Stone";
+			case UNDERLORD -> "Underlord Revelation";
+			case OVERLORD -> "Overlord Revelation";
+			case ARCHLORD -> "Archlord Revelation";
 			default -> "";
 		};
 	}
@@ -252,12 +260,22 @@ public final class BreakthroughManager {
 	}
 
 	/**
-	 * Actually perform the breakthrough: consume items, advance stage, boost stats.
-	 * Called when the player presses the "Advance" button.
-	 * Returns true if the breakthrough was successful.
+	 * Attempt a breakthrough. For most stages this is instant. For Lord stages
+	 * (Underlord/Overlord/Archlord), it consumes the item and starts a revelation
+	 * trial — the player must kill spirits to complete the breakthrough.
+	 *
+	 * Returns true if the breakthrough started (item consumed) or completed instantly.
 	 */
 	public static boolean attemptBreakthrough(ServerPlayer player, CradlePlayerData data) {
 		if (!canAdvance(player, data)) {
+			return false;
+		}
+
+		// Block if already in a trial
+		if (RevelationTrialManager.isInTrial(player.getUUID())) {
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A7cYou are already undergoing a revelation trial!"
+			));
 			return false;
 		}
 
@@ -275,12 +293,29 @@ public final class BreakthroughManager {
 			));
 		}
 
+		// Lord stages require a revelation trial instead of instant advancement
+		if (RevelationTrialManager.requiresTrial(nextStage)) {
+			RevelationTrialManager.startTrial(player, nextStage);
+			return true; // Item consumed, trial started
+		}
+
+		// All other stages: instant breakthrough
+		performBreakthrough(player, data, nextStage);
+		return true;
+	}
+
+	/**
+	 * Performs the actual stage advancement: Iron Body check, set stage,
+	 * boost Madra, notify player. Called directly for instant breakthroughs
+	 * and by RevelationTrialManager when a trial is completed.
+	 */
+	public static void performBreakthrough(ServerPlayer player, CradlePlayerData data,
+										   CradlePlayerData.AdvancementStage nextStage) {
 		// Check for Iron Body crystal when advancing to Iron stage
 		if (nextStage == CradlePlayerData.AdvancementStage.IRON) {
 			CradlePlayerData.IronBody bodyType = detectIronBodyCrystal(player);
 			data.setIronBody(bodyType);
 			if (bodyType != CradlePlayerData.IronBody.NONE) {
-				// Consume the crystal from whichever hand it's in
 				consumeCrystalFromHands(player, bodyType);
 				player.sendSystemMessage(Component.literal(
 						"\u00A76[Cradle] \u00A7d" + bodyType.displayName() +
@@ -321,8 +356,6 @@ public final class BreakthroughManager {
 
 		CradleMod.LOGGER.info("Player {} broke through to {} at level {}",
 				player.getName().getString(), nextStage.name(), data.getPlayerLevel());
-
-		return true;
 	}
 
 	/**

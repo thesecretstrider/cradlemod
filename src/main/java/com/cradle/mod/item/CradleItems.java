@@ -25,6 +25,11 @@ public final class CradleItems {
 	public static final Item STEELBORN_CRYSTAL = registerItem("steelborn_crystal", new Item.Properties());
 	public static final Item RAINDROP_CRYSTAL = registerItem("raindrop_crystal", new Item.Properties());
 
+	// Revelation items — crafted and consumed to start Lord-stage breakthrough trials
+	public static final Item UNDERLORD_REVELATION = registerItem("underlord_revelation", new Item.Properties().stacksTo(1));
+	public static final Item OVERLORD_REVELATION = registerItem("overlord_revelation", new Item.Properties().stacksTo(1));
+	public static final Item ARCHLORD_REVELATION = registerItem("archlord_revelation", new Item.Properties().stacksTo(1));
+
 	/**
 	 * Helper: creates a ResourceKey, sets it on the properties, then registers.
 	 */

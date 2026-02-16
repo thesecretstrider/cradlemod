@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    "cradlemod:spirit_stone",
+    "minecraft:blaze_powder",
+    "minecraft:ghast_tear"
+  ],
+  "result": {
+    "id": "cradlemod:underlord_revelation",
+    "count": 1
+  }
+}
