@@ -2,18 +2,30 @@ package com.cradle.mod;
 
 import com.cradle.mod.network.CradleSyncPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DirtPathBlock;
+import net.minecraft.world.level.block.GrassBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.resources.Identifier;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -47,6 +59,19 @@ public final class CyclingManager {
 
 	// Movement threshold — if X or Z changes by more than this, cycling stops
 	private static final double MOVE_THRESHOLD = 0.01;
+
+	// Sword cycling: multiplier applied when cycling with sword stabbed into block
+	// Only applies to sword paths (Endless Sword, Stellar Spear)
+	private static final float SWORD_CYCLING_MULTIPLIER = 2.0f;
+
+	// Environmental cycling bonus: applied when cycling near path-specific environment
+	private static final float ENVIRONMENTAL_BONUS = 1.5f;
+	// How often to check environment (every N ticks) — avoids scanning blocks every tick
+	private static final int ENVIRONMENT_CHECK_INTERVAL = 20; // 1 second
+	// Tracks environment check counter per player
+	private static final Map<UUID, Integer> ENVIRONMENT_CHECK_TICKS = new HashMap<>();
+	// Cached environment bonus per player (updated every ENVIRONMENT_CHECK_INTERVAL)
+	private static final Map<UUID, Float> CACHED_ENV_BONUS = new HashMap<>();
 
 	// Tracks player position when they start cycling (for movement detection)
 	private static final Map<UUID, double[]> CYCLING_POSITIONS = new HashMap<>();
@@ -95,21 +120,11 @@ public final class CyclingManager {
 				data.setCurrentMadra(data.getCurrentMadra() + passiveRate);
 			}
 
-			// Iron Body passive buff (Steelborn/Raindrop toggle; Bloodforged is instant on P press)
-			// Only re-apply when the effect is missing or about to expire,
-			// so the internal tick counter can progress and the effect actually works.
+			// Iron Body passive buff (Steelborn/Raindrop toggle)
 			if (data.isIronBodyActive()) {
 				switch (data.getIronBody()) {
-					case STEELBORN -> {
-						if (!player.hasEffect(MobEffects.RESISTANCE) || player.getEffect(MobEffects.RESISTANCE).getDuration() < 10) {
-							player.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, 60, 0, false, false));
-						}
-					}
-					case RAINDROP -> {
-						if (!player.hasEffect(MobEffects.SPEED) || player.getEffect(MobEffects.SPEED).getDuration() < 10) {
-							player.addEffect(new MobEffectInstance(MobEffects.SPEED, 60, 0, false, false));
-						}
-					}
+					case STEELBORN -> refreshEffect(player, MobEffects.RESISTANCE, 60, 0);
+					case RAINDROP -> refreshEffect(player, MobEffects.SPEED, 60, 0);
 					default -> {}
 				}
 			}
@@ -173,9 +188,11 @@ public final class CyclingManager {
 						double dx = Math.abs(player.getX() - startPos[0]);
 						double dz = Math.abs(player.getZ() - startPos[1]);
 						if (dx > MOVE_THRESHOLD || dz > MOVE_THRESHOLD) {
+							boolean wasSwordCycling = data.isSwordCycling();
 							stopCycling(player, data);
-							player.displayClientMessage(Component.literal(
-									"\u00A7fYou moved and stopped cycling."
+							player.displayClientMessage(Component.literal(wasSwordCycling
+									? "\u00A77You pull your blade free from the earth."
+									: "\u00A7fYou moved and stopped cycling."
 							), true);
 							// Still send sync this tick so client sees the change
 							ServerPlayNetworking.send(player, createSyncPayload(player, data));
@@ -192,8 +209,26 @@ public final class CyclingManager {
 				// Glowing outline while cycling (refreshed every tick, 40 ticks duration as safety buffer)
 				player.addEffect(new MobEffectInstance(MobEffects.GLOWING, 40, 0, false, false));
 
+				// Validate sword cycling — clear if player no longer holds a sword
+				if (data.isSwordCycling()) {
+					if (!isHoldingSword(player)) {
+						data.setSwordCycling(false);
+					}
+				}
+
 				// Add cycling XP (scales with stage)
 				float multiplier = data.getCyclingSpeedMultiplier();
+
+				// Sword cycling: 2x bonus for sword paths (Endless Sword / Stellar Spear)
+				if (data.isSwordCycling()) {
+					multiplier *= SWORD_CYCLING_MULTIPLIER;
+				}
+
+				// Environmental cycling bonus (path-specific)
+				float envBonus = getEnvironmentalBonus(player, data);
+				if (envBonus > 1.0f) {
+					multiplier *= envBonus;
+				}
 
 				// Underlord–Archlord: cycling while using abilities runs at half speed
 				// Sage/Monarch: full speed (perfect aura control)
@@ -271,7 +306,10 @@ public final class CyclingManager {
 	 */
 	public static void stopCycling(ServerPlayer player, CradlePlayerData data) {
 		data.setActivelyCycling(false);
+		data.setSwordCycling(false);
 		CYCLING_POSITIONS.remove(player.getUUID());
+		ENVIRONMENT_CHECK_TICKS.remove(player.getUUID());
+		CACHED_ENV_BONUS.remove(player.getUUID());
 		player.removeEffect(MobEffects.GLOWING);
 	}
 
@@ -295,215 +333,147 @@ public final class CyclingManager {
 		removeEnforcerModifiers(player);
 	}
 
-	/**
-	 * Applies path-specific Enforcer effects each tick.
-	 * Uses attribute modifiers for stat boosts (applied once, checked each tick)
-	 * and potion effects for visual/status effects.
-	 */
+	/** Applies path-specific Enforcer effects each tick (attribute modifiers + status effects). */
 	private static void applyEnforcerEffects(ServerPlayer player, CradlePlayerData data) {
-		float powerMult = data.getAbilityPowerMultiplier();
+		float pm = data.getAbilityPowerMultiplier();
 
 		switch (data.getChosenPath()) {
 			case BLACK_FLAME -> {
-				// Burning Body: +attack damage, +sprint speed, attacks ignite enemies
-				// Self-damage over time as strain
-				double dmgBonus = 4.0 * powerMult;
-				double speedBonus = 0.04 * powerMult;
-
 				ensureModifier(player, Attributes.ATTACK_DAMAGE, ENFORCER_ATTACK_DAMAGE_ID,
-						dmgBonus, AttributeModifier.Operation.ADD_VALUE);
+						4.0 * pm, AttributeModifier.Operation.ADD_VALUE);
 				ensureModifier(player, Attributes.MOVEMENT_SPEED, ENFORCER_SPEED_ID,
-						speedBonus, AttributeModifier.Operation.ADD_VALUE);
+						0.04 * pm, AttributeModifier.Operation.ADD_VALUE);
+				refreshEffect(player, MobEffects.FIRE_RESISTANCE, 60, 0);
 
-				// Fire resistance so the player doesn't get annoyed by their own fire
-				if (!player.hasEffect(MobEffects.FIRE_RESISTANCE) || player.getEffect(MobEffects.FIRE_RESISTANCE).getDuration() < 10) {
-					player.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 60, 0, false, false));
-				}
-
-				// Self-damage strain every BURNING_BODY_STRAIN_INTERVAL ticks
-				int strainTicks = BURNING_BODY_STRAIN_TICKS.getOrDefault(player.getUUID(), 0) + 1;
-				BURNING_BODY_STRAIN_TICKS.put(player.getUUID(), strainTicks);
-				if (strainTicks >= BURNING_BODY_STRAIN_INTERVAL) {
+				// Self-damage strain (Blackflame burns its user)
+				int strain = BURNING_BODY_STRAIN_TICKS.getOrDefault(player.getUUID(), 0) + 1;
+				BURNING_BODY_STRAIN_TICKS.put(player.getUUID(), strain);
+				if (strain >= BURNING_BODY_STRAIN_INTERVAL) {
 					BURNING_BODY_STRAIN_TICKS.put(player.getUUID(), 0);
 					player.hurtServer(player.level(), player.damageSources().magic(), BURNING_BODY_STRAIN_DAMAGE);
 				}
 			}
-
-			case ENDLESS_SWORD -> {
-				// Flowing Edge: +attack speed, reduced attack cooldown
-				double atkSpeedBonus = 1.0 * powerMult;
-
-				ensureModifier(player, Attributes.ATTACK_SPEED, ENFORCER_ATTACK_SPEED_ID,
-						atkSpeedBonus, AttributeModifier.Operation.ADD_VALUE);
-			}
-
+			case ENDLESS_SWORD -> ensureModifier(player, Attributes.ATTACK_SPEED,
+					ENFORCER_ATTACK_SPEED_ID, 1.0 * pm, AttributeModifier.Operation.ADD_VALUE);
 			case STELLAR_SPEAR -> {
-				// Stellar Alignment: +forward speed, reduced knockback taken
-				double speedBonus = 0.04 * powerMult;
-				double kbResist = 0.6 * powerMult;
-
 				ensureModifier(player, Attributes.MOVEMENT_SPEED, ENFORCER_SPEED_ID,
-						speedBonus, AttributeModifier.Operation.ADD_VALUE);
+						0.04 * pm, AttributeModifier.Operation.ADD_VALUE);
 				ensureModifier(player, Attributes.KNOCKBACK_RESISTANCE, ENFORCER_KNOCKBACK_RESISTANCE_ID,
-						Math.min(kbResist, 1.0), AttributeModifier.Operation.ADD_VALUE);
+						Math.min(0.6 * pm, 1.0), AttributeModifier.Operation.ADD_VALUE);
 			}
-
 			case CLOUD_HAMMER -> {
-				// Thunderous Weight: +armor, +knockback dealt, -movement speed
-				double armorBonus = 6.0 * powerMult;
-				double speedPenalty = -0.03 + (powerMult - 1.0) * 0.01; // Less penalty at higher stages
-				double knockbackBonus = 2.0 * powerMult;
-
 				ensureModifier(player, Attributes.ARMOR, ENFORCER_ARMOR_ID,
-						armorBonus, AttributeModifier.Operation.ADD_VALUE);
+						6.0 * pm, AttributeModifier.Operation.ADD_VALUE);
 				ensureModifier(player, Attributes.MOVEMENT_SPEED, ENFORCER_SPEED_ID,
-						speedPenalty, AttributeModifier.Operation.ADD_VALUE);
+						-0.03 + (pm - 1.0) * 0.01, AttributeModifier.Operation.ADD_VALUE);
 				ensureModifier(player, Attributes.ATTACK_KNOCKBACK, ENFORCER_KNOCKBACK_RESISTANCE_ID,
-						knockbackBonus, AttributeModifier.Operation.ADD_VALUE);
+						2.0 * pm, AttributeModifier.Operation.ADD_VALUE);
 			}
-
-			case HOLLOW_KING -> {
-				// Hollow Circulation: slight damage reduction, passive Madra regen
-				if (!player.hasEffect(MobEffects.RESISTANCE) || player.getEffect(MobEffects.RESISTANCE).getDuration() < 10) {
-					int amp = powerMult >= 1.5f ? 1 : 0; // Resistance II at Underlord+
-					player.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, 60, amp, false, false));
-				}
-			}
-
-			default -> {} // UNSET path — no effects
+			case HOLLOW_KING -> refreshEffect(player, MobEffects.RESISTANCE, 60, pm >= 1.5f ? 1 : 0);
+			default -> {}
 		}
 	}
 
-	/**
-	 * Ensures an attribute modifier is present on the player. If it's already there
-	 * with the correct value, does nothing. If the value changed (e.g., Gold upgrade),
-	 * removes and re-adds it.
-	 */
-	private static void ensureModifier(ServerPlayer player,
-										net.minecraft.core.Holder<net.minecraft.world.entity.ai.attributes.Attribute> attribute,
-										Identifier id, double amount, AttributeModifier.Operation operation) {
+	/** Refreshes a potion effect only when it's missing or about to expire. */
+	private static void refreshEffect(ServerPlayer player,
+										net.minecraft.core.Holder<net.minecraft.world.effect.MobEffect> effect,
+										int duration, int amplifier) {
+		if (!player.hasEffect(effect) || player.getEffect(effect).getDuration() < 10) {
+			player.addEffect(new MobEffectInstance(effect, duration, amplifier, false, false));
+		}
+	}
+
+	/** Ensures an attribute modifier is present with the correct value. */
+	private static void ensureModifier(ServerPlayer player, Holder<Attribute> attribute,
+										Identifier id, double amount, AttributeModifier.Operation op) {
 		var instance = player.getAttribute(attribute);
 		if (instance == null) return;
-
 		AttributeModifier existing = instance.getModifier(id);
 		if (existing != null) {
-			if (existing.amount() == amount && existing.operation() == operation) {
-				return; // Already correct
-			}
+			if (existing.amount() == amount && existing.operation() == op) return;
 			instance.removeModifier(id);
 		}
-		instance.addTransientModifier(new AttributeModifier(id, amount, operation));
+		instance.addTransientModifier(new AttributeModifier(id, amount, op));
 	}
 
-	/**
-	 * Removes all Enforcer-related attribute modifiers from the player.
-	 * Called when the Enforcer technique is deactivated.
-	 */
+	/** Removes all Enforcer attribute modifiers from the player. */
+	@SuppressWarnings("unchecked")
 	public static void removeEnforcerModifiers(ServerPlayer player) {
-		Identifier[] modifierIds = {
-				ENFORCER_ATTACK_DAMAGE_ID,
-				ENFORCER_SPEED_ID,
-				ENFORCER_ATTACK_SPEED_ID,
-				ENFORCER_ARMOR_ID,
-				ENFORCER_KNOCKBACK_RESISTANCE_ID
+		Identifier[] ids = {
+			ENFORCER_ATTACK_DAMAGE_ID, ENFORCER_SPEED_ID, ENFORCER_ATTACK_SPEED_ID,
+			ENFORCER_ARMOR_ID, ENFORCER_KNOCKBACK_RESISTANCE_ID
 		};
-
-		for (Identifier id : modifierIds) {
-			// Try removing from all relevant attributes
-			removeModifierSafe(player, Attributes.ATTACK_DAMAGE, id);
-			removeModifierSafe(player, Attributes.MOVEMENT_SPEED, id);
-			removeModifierSafe(player, Attributes.ATTACK_SPEED, id);
-			removeModifierSafe(player, Attributes.ARMOR, id);
-			removeModifierSafe(player, Attributes.KNOCKBACK_RESISTANCE, id);
-			removeModifierSafe(player, Attributes.ATTACK_KNOCKBACK, id);
+		Holder<Attribute>[] attrs = new Holder[]{
+			Attributes.ATTACK_DAMAGE, Attributes.MOVEMENT_SPEED, Attributes.ATTACK_SPEED,
+			Attributes.ARMOR, Attributes.KNOCKBACK_RESISTANCE, Attributes.ATTACK_KNOCKBACK
+		};
+		for (Identifier id : ids) {
+			for (Holder<Attribute> attr : attrs) {
+				removeModifierSafe(player, attr, id);
+			}
 		}
 	}
 
-	private static void removeModifierSafe(ServerPlayer player,
-											net.minecraft.core.Holder<net.minecraft.world.entity.ai.attributes.Attribute> attribute,
-											Identifier id) {
+	private static void removeModifierSafe(ServerPlayer player, Holder<Attribute> attribute, Identifier id) {
 		var instance = player.getAttribute(attribute);
-		if (instance != null && instance.getModifier(id) != null) {
-			instance.removeModifier(id);
-		}
+		if (instance != null && instance.getModifier(id) != null) instance.removeModifier(id);
 	}
 
 	// ── Ruler technique effects ────────────────────────────────────────
 
-	/**
-	 * Applies Ruler area effects to enemies near the player.
-	 * Called every RULER_EFFECT_INTERVAL ticks (0.5 seconds) while Ruler is active.
-	 */
+	/** Applies Ruler area effects to nearby enemies. Called every 0.5s while Ruler is active. */
 	private static void applyRulerEffects(ServerPlayer player, CradlePlayerData data) {
 		float powerMult = data.getAbilityPowerMultiplier();
 		AABB area = player.getBoundingBox().inflate(RULER_RADIUS);
-
-		java.util.List<LivingEntity> enemies = player.level().getEntitiesOfClass(
-				LivingEntity.class, area,
-				e -> e != player && e.isAlive() && !e.isAlliedTo(player)
-		);
-
+		List<LivingEntity> enemies = player.level().getEntitiesOfClass(
+				LivingEntity.class, area, e -> e != player && e.isAlive() && !e.isAlliedTo(player));
 		if (enemies.isEmpty()) return;
 
-		net.minecraft.server.level.ServerLevel serverLevel = player.level();
+		ServerLevel level = player.level();
+		boolean underlordPlus = powerMult >= 1.5f;
 
 		switch (data.getChosenPath()) {
 			case BLACK_FLAME -> {
-				// Domain of Ash: enemies inside burn over time
 				float damage = 2.0f * powerMult;
 				for (LivingEntity e : enemies) {
-					e.hurtServer(serverLevel, player.damageSources().magic(), damage);
+					e.hurtServer(level, player.damageSources().magic(), damage);
 					e.igniteForSeconds(2.0f);
 				}
 			}
-
 			case ENDLESS_SWORD -> {
-				// Field of Blades: enemies moving near take repeated damage
 				float damage = 1.5f * powerMult;
 				for (LivingEntity e : enemies) {
-					double speed = e.getDeltaMovement().horizontalDistance();
-					if (speed > 0.01) {
-						e.hurtServer(serverLevel, player.damageSources().magic(), damage);
+					if (e.getDeltaMovement().horizontalDistance() > 0.01) {
+						e.hurtServer(level, player.damageSources().magic(), damage);
 					}
 				}
 			}
-
 			case STELLAR_SPEAR -> {
-				// Spear Domain: enemies moving toward the player take damage
 				float damage = 2.0f * powerMult;
 				for (LivingEntity e : enemies) {
-					net.minecraft.world.phys.Vec3 toPlayer = player.position().subtract(e.position()).normalize();
-					net.minecraft.world.phys.Vec3 movement = e.getDeltaMovement().normalize();
-					double dot = toPlayer.x * movement.x + toPlayer.z * movement.z;
-					if (dot > 0.3) {
-						e.hurtServer(serverLevel, player.damageSources().magic(), damage);
+					Vec3 toPlayer = player.position().subtract(e.position()).normalize();
+					Vec3 movement = e.getDeltaMovement().normalize();
+					if (toPlayer.x * movement.x + toPlayer.z * movement.z > 0.3) {
+						e.hurtServer(level, player.damageSources().magic(), damage);
 					}
 				}
 			}
-
 			case CLOUD_HAMMER -> {
-				// Gravity Field: enemies slow + reduced jump
-				int duration = 20;
-				int slowAmp = powerMult >= 1.5f ? 2 : 1; // Slowness III at Underlord+
+				int amp = underlordPlus ? 2 : 1;
 				for (LivingEntity e : enemies) {
-					e.addEffect(new MobEffectInstance(MobEffects.SLOWNESS, duration, slowAmp, false, false));
-					e.addEffect(new MobEffectInstance(MobEffects.JUMP_BOOST, duration, 128, false, false));
+					e.addEffect(new MobEffectInstance(MobEffects.SLOWNESS, 20, amp, false, false));
+					e.addEffect(new MobEffectInstance(MobEffects.JUMP_BOOST, 20, 128, false, false));
 				}
 			}
-
 			case HOLLOW_KING -> {
-				// Hollow Domain: damage reduction aura, weaken enemy abilities
-				int duration = 20;
-				int weakAmp = powerMult >= 1.5f ? 1 : 0; // Weakness II at Underlord+
+				int weakAmp = underlordPlus ? 1 : 0;
 				for (LivingEntity e : enemies) {
-					e.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, duration, weakAmp, false, false));
+					e.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 20, weakAmp, false, false));
 				}
 				if (!player.hasEffect(MobEffects.RESISTANCE) || player.getEffect(MobEffects.RESISTANCE).getDuration() < 10) {
-					int resAmp = powerMult >= 1.5f ? 1 : 0;
-					player.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, 20, resAmp, false, false));
+					player.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, 20, weakAmp, false, false));
 				}
 			}
-
 			default -> {}
 		}
 	}
@@ -537,6 +507,83 @@ public final class CyclingManager {
 		CradleMod.LOGGER.info("Player {} leveled up to {}", player.getName().getString(), data.getPlayerLevel());
 	}
 
+	// ── Environmental cycling bonus ───────────────────────────────────
+
+	/**
+	 * Returns the environmental cycling bonus (cached, rechecked every second).
+	 * Black Flame 1.5x near fire/lava, Cloud Hammer 1.5x at Y>=128, others 1.0x.
+	 * Shows an action bar message when the bonus first activates.
+	 */
+	private static float getEnvironmentalBonus(ServerPlayer player, CradlePlayerData data) {
+		UUID id = player.getUUID();
+		int tick = ENVIRONMENT_CHECK_TICKS.getOrDefault(id, 0) + 1;
+		ENVIRONMENT_CHECK_TICKS.put(id, tick);
+		if (tick < ENVIRONMENT_CHECK_INTERVAL) {
+			return CACHED_ENV_BONUS.getOrDefault(id, 1.0f);
+		}
+		ENVIRONMENT_CHECK_TICKS.put(id, 0);
+		float prevBonus = CACHED_ENV_BONUS.getOrDefault(id, 1.0f);
+		float bonus = calculateEnvironmentalBonus(player, data);
+		CACHED_ENV_BONUS.put(id, bonus);
+
+		// Notify when bonus activates (transition from 1.0 to >1.0)
+		if (bonus > 1.0f && prevBonus <= 1.0f) {
+			String msg = switch (data.getChosenPath()) {
+				case BLACK_FLAME -> "\u00A76The heat fuels your cycling.";
+				case CLOUD_HAMMER -> "\u00A7bThe high winds empower your cycling.";
+				default -> null;
+			};
+			if (msg != null) player.displayClientMessage(Component.literal(msg), true);
+		}
+		return bonus;
+	}
+
+	private static float calculateEnvironmentalBonus(ServerPlayer player, CradlePlayerData data) {
+		return switch (data.getChosenPath()) {
+			case BLACK_FLAME -> isNearHeatSource(player) ? ENVIRONMENTAL_BONUS : 1.0f;
+			case CLOUD_HAMMER -> player.getY() >= 128 ? ENVIRONMENTAL_BONUS : 1.0f;
+			default -> 1.0f; // sword paths use sword cycling, Hollow King has no env bonus
+		};
+	}
+
+	/** Scans a 7×7×7 cube around the player for fire, lava, or magma blocks. */
+	private static boolean isNearHeatSource(ServerPlayer player) {
+		BlockPos pos = player.blockPosition();
+		for (int dx = -3; dx <= 3; dx++) {
+			for (int dy = -3; dy <= 3; dy++) {
+				for (int dz = -3; dz <= 3; dz++) {
+					BlockState state = player.level().getBlockState(pos.offset(dx, dy, dz));
+					if (state.is(Blocks.FIRE) || state.is(Blocks.SOUL_FIRE)
+							|| state.is(Blocks.LAVA) || state.is(Blocks.MAGMA_BLOCK)) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	// ── Sword cycling helpers ─────────────────────────────────────────
+
+	/** Returns true if the player is holding any sword in either hand. */
+	public static boolean isHoldingSword(ServerPlayer player) {
+		return player.getMainHandItem().is(ItemTags.SWORDS)
+				|| player.getOffhandItem().is(ItemTags.SWORDS);
+	}
+
+	/** Returns true if the block is soft enough to stab a sword into. */
+	public static boolean isSoftBlock(BlockState blockState) {
+		Block block = blockState.getBlock();
+		return block instanceof GrassBlock || block instanceof DirtPathBlock
+				|| blockState.is(Blocks.DIRT) || blockState.is(Blocks.COARSE_DIRT)
+				|| blockState.is(Blocks.ROOTED_DIRT) || blockState.is(Blocks.SAND)
+				|| blockState.is(Blocks.RED_SAND) || blockState.is(Blocks.GRAVEL)
+				|| blockState.is(Blocks.SOUL_SAND) || blockState.is(Blocks.SOUL_SOIL)
+				|| blockState.is(Blocks.CLAY) || blockState.is(Blocks.MUD)
+				|| blockState.is(Blocks.FARMLAND) || blockState.is(Blocks.MYCELIUM)
+				|| blockState.is(Blocks.PODZOL) || blockState.is(Blocks.SNOW_BLOCK);
+	}
+
 	// ── Sync payload helper ────────────────────────────────────────────
 
 	/**
@@ -559,7 +606,8 @@ public final class CyclingManager {
 						data.isEnforcerActive(),
 						data.isRulerActive(),
 						data.hasSage(),
-						data.hasHerald()
+						data.hasHerald(),
+						data.isSwordCycling()
 				),
 				data.getIronBody().name()
 		);

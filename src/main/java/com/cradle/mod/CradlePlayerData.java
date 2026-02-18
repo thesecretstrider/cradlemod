@@ -145,6 +145,7 @@ public final class CradlePlayerData {
 	private boolean rulerActive;
 	private boolean hasSage;
 	private boolean hasHerald;
+	private boolean swordCycling; // True when cycling with sword stabbed into soft block (Endless Sword / Stellar Spear)
 
 	private static final float DEFAULT_MAX_MADRA = 100.0f;
 
@@ -163,6 +164,7 @@ public final class CradlePlayerData {
 		this.rulerActive = false;
 		this.hasSage = false;
 		this.hasHerald = false;
+		this.swordCycling = false;
 	}
 
 	// ── Getters / setters ──────────────────────────────────────────────
@@ -277,6 +279,23 @@ public final class CradlePlayerData {
 
 	public void setHasHerald(boolean hasHerald) {
 		this.hasHerald = hasHerald;
+	}
+
+	public boolean isSwordCycling() {
+		return swordCycling;
+	}
+
+	public void setSwordCycling(boolean swordCycling) {
+		this.swordCycling = swordCycling;
+	}
+
+	/**
+	 * Returns true if this path benefits from sword-stabbing cycling
+	 * (right-click sword into soft block for 2x cycling speed).
+	 * Only sword-based paths benefit: Endless Sword and Stellar Spear.
+	 */
+	public boolean isSwordPath() {
+		return chosenPath == Path.ENDLESS_SWORD || chosenPath == Path.STELLAR_SPEAR;
 	}
 
 	/**

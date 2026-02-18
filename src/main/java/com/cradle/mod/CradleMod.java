@@ -24,6 +24,7 @@ import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
@@ -34,6 +35,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.phys.Vec3;
@@ -53,21 +56,13 @@ public class CradleMod implements ModInitializer {
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
 	private static final String DATA_FILE_NAME = "cradlemod_playerdata.dat";
-
-	// Bloodforged Iron Body heal cooldown: 30 seconds (600 ticks)
 	private static final long BLOODFORGED_COOLDOWN_MS = 30_000;
-	private static final Map<UUID, Long> bloodforgedCooldowns = new HashMap<>();
-
-	// Striker technique cooldown: 2 seconds (2000ms)
 	private static final long STRIKER_COOLDOWN_MS = 2_000;
-	private static final Map<UUID, Long> strikerCooldowns = new HashMap<>();
-
-	// Striker Madra cost per use
 	private static final float STRIKER_MADRA_COST = 15.0f;
+	private static final int AUTO_SAVE_INTERVAL_TICKS = 600; // 30 seconds
 
-	// Auto-save every 30 seconds (600 ticks at 20 tps)
-	// Frequent saves protect against MC being closed without clean shutdown
-	private static final int AUTO_SAVE_INTERVAL_TICKS = 600;
+	private static final Map<UUID, Long> bloodforgedCooldowns = new HashMap<>();
+	private static final Map<UUID, Long> strikerCooldowns = new HashMap<>();
 	private static int ticksSinceLastSave = 0;
 
 	@Override
@@ -104,9 +99,7 @@ public class CradleMod implements ModInitializer {
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			ServerPlayer player = handler.getPlayer();
 			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
-			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
-
-			// If the player hasn't chosen a path yet, open the selection screen
+			sync(player, data);
 			if (!data.hasChosenPath()) {
 				ServerPlayNetworking.send(player, new OpenPathSelectionPayload());
 			}
@@ -136,13 +129,10 @@ public class CradleMod implements ModInitializer {
 			// Set the path
 			data.setChosenPath(path);
 
-			// Save immediately — path choice is critical data
 			autoSave(player.level().getServer());
+			sync(player, data);
 
-			// Sync updated data to client
-			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
-
-			// Send confirmation chat message with path-specific lore
+			// Path-specific lore
 			player.sendSystemMessage(Component.literal(
 					"\u00A76[Cradle] \u00A76You have chosen the \u00A7e" + path.displayName() + "\u00A76!"
 			));
@@ -168,242 +158,150 @@ public class CradleMod implements ModInitializer {
 			));
 		});
 
-		// Handle advancement attempt from the client (player clicked "Advance" button)
+		// Handle advancement attempt (player clicked "Advance" button)
 		ServerPlayNetworking.registerGlobalReceiver(AttemptAdvancePayload.TYPE, (payload, context) -> {
 			ServerPlayer player = context.player();
 			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
 
-			boolean success = BreakthroughManager.attemptBreakthrough(player, data);
-			if (!success) {
-				player.displayClientMessage(Component.literal(
-						"\u00A7cYou do not meet the requirements to advance."
-				), true);
-			} else {
-				// Save immediately — breakthrough is critical data
+			if (BreakthroughManager.attemptBreakthrough(player, data)) {
 				autoSave(player.level().getServer());
+			} else {
+				player.displayClientMessage(Component.literal(
+						"\u00A7cYou do not meet the requirements to advance."), true);
 			}
-
-			// Always re-sync so the client updates (button disappears, stage changes, etc.)
-			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
+			sync(player, data);
 		});
 
-		// Handle Sage/Herald choice from the client (player clicked "Become Sage" or "Become Herald")
+		// Handle Sage/Herald choice (player clicked "Become Sage" or "Become Herald")
 		ServerPlayNetworking.registerGlobalReceiver(ChooseSageHeraldPayload.TYPE, (payload, context) -> {
 			ServerPlayer player = context.player();
 			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
 
-			// Validate: must be at Archlord stage
 			if (data.getAdvancementStage() != CradlePlayerData.AdvancementStage.ARCHLORD) {
-				player.displayClientMessage(Component.literal(
-						"\u00A7cYou must be at Archlord to make this choice."
-				), true);
+				player.displayClientMessage(Component.literal("\u00A7cYou must be at Archlord to make this choice."), true);
 				return;
 			}
-
-			// Validate: must have reached level requirement
 			if (data.getPlayerLevel() < 350) {
-				player.displayClientMessage(Component.literal(
-						"\u00A7cYou must reach Level 350 to advance beyond Archlord."
-				), true);
+				player.displayClientMessage(Component.literal("\u00A7cYou must reach Level 350 to advance beyond Archlord."), true);
 				return;
 			}
-
-			// Validate: hasn't already chosen
 			if (data.hasSage() || data.hasHerald()) {
-				player.displayClientMessage(Component.literal(
-						"\u00A7cYou have already made your choice."
-				), true);
+				player.displayClientMessage(Component.literal("\u00A7cYou have already made your choice."), true);
 				return;
 			}
 
-			// Validate choice string
-			String choice = payload.choice();
-			if ("SAGE".equals(choice)) {
-				data.setHasSage(true);
-				data.setAdvancementStage(CradlePlayerData.AdvancementStage.SAGE);
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7b\u2728 You have touched the Way and become a Sage! \u2728"
-				));
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7b\u00A7oThe Icon appears above you. Reality itself acknowledges your authority."
-				));
-			} else if ("HERALD".equals(choice)) {
-				data.setHasHerald(true);
-				data.setAdvancementStage(CradlePlayerData.AdvancementStage.HERALD);
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7d\u2728 Your spirit merges with your body. You are now a Herald! \u2728"
-				));
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7d\u00A7oYour flesh transcends mortality. You are reborn in the image of your spirit."
-				));
-			} else {
-				return; // Invalid choice — ignore
+			switch (payload.choice()) {
+				case "SAGE" -> {
+					data.setHasSage(true);
+					data.setAdvancementStage(CradlePlayerData.AdvancementStage.SAGE);
+					player.sendSystemMessage(Component.literal(
+							"\u00A76[Cradle] \u00A7b\u2728 You have touched the Way and become a Sage! \u2728"));
+					player.sendSystemMessage(Component.literal(
+							"\u00A76[Cradle] \u00A7b\u00A7oThe Icon appears above you. Reality itself acknowledges your authority."));
+				}
+				case "HERALD" -> {
+					data.setHasHerald(true);
+					data.setAdvancementStage(CradlePlayerData.AdvancementStage.HERALD);
+					player.sendSystemMessage(Component.literal(
+							"\u00A76[Cradle] \u00A7d\u2728 Your spirit merges with your body. You are now a Herald! \u2728"));
+					player.sendSystemMessage(Component.literal(
+							"\u00A76[Cradle] \u00A7d\u00A7oYour flesh transcends mortality. You are reborn in the image of your spirit."));
+				}
+				default -> { return; }
 			}
 
-			// Save and sync
 			autoSave(player.level().getServer());
-			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
+			sync(player, data);
 		});
 
-		// Handle cycling toggle from the client (player pressed G)
+		// Handle cycling toggle (G key)
 		ServerPlayNetworking.registerGlobalReceiver(ToggleCyclingPayload.TYPE, (payload, context) -> {
 			ServerPlayer player = context.player();
 			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
 
 			if (data.isActivelyCycling()) {
 				CyclingManager.stopCycling(player, data);
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7fYou stop cycling."
-				));
+				player.displayClientMessage(Component.literal("\u00A7fYou stop cycling."), true);
 			} else {
-				// Below Low Gold, can't cycle while a technique is active
 				if (!CyclingManager.canCycleWhileUsingAbilities(data)
 						&& (data.isEnforcerActive() || data.isRulerActive())) {
 					player.displayClientMessage(Component.literal(
-							"\u00A7cYou can't cycle while a technique is active!"
-					), true);
-					ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
+							"\u00A7cYou can't cycle while a technique is active!"), true);
+					sync(player, data);
 					return;
 				}
-
 				CyclingManager.startCycling(player, data);
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7fYou begin cycling. Madra flows through you..."
-				));
+				player.displayClientMessage(Component.literal(
+						"\u00A7fYou begin cycling. Madra flows through you..."), true);
 			}
-
-			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
+			sync(player, data);
 		});
 
-		// Handle Iron Body activation from the client (player pressed P)
-		// Bloodforged: instant heal burst (not a toggle)
-		// Steelborn/Raindrop: toggle on/off
+		// Handle Iron Body (P key). Bloodforged = instant heal; Steelborn/Raindrop = toggle.
 		ServerPlayNetworking.registerGlobalReceiver(ToggleIronBodyPayload.TYPE, (payload, context) -> {
 			ServerPlayer player = context.player();
 			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
 
 			if (data.getIronBody() == CradlePlayerData.IronBody.NONE) {
-				player.displayClientMessage(Component.literal(
-						"\u00A7cYou don't have an Iron Body."
-				), true);
+				player.displayClientMessage(Component.literal("\u00A7cYou don't have an Iron Body."), true);
 				return;
 			}
 
 			if (data.getIronBody() == CradlePlayerData.IronBody.BLOODFORGED) {
-				// Instant Health II burst with 30s cooldown
 				long now = System.currentTimeMillis();
 				Long lastUse = bloodforgedCooldowns.get(player.getUUID());
 				if (lastUse != null && now - lastUse < BLOODFORGED_COOLDOWN_MS) {
-					long remainingMs = BLOODFORGED_COOLDOWN_MS - (now - lastUse);
-					int remainingSec = (int) Math.ceil(remainingMs / 1000.0);
+					int remainingSec = (int) Math.ceil((BLOODFORGED_COOLDOWN_MS - (now - lastUse)) / 1000.0);
 					player.displayClientMessage(Component.literal(
-							"\u00A7cBloodforged heal on cooldown! \u00A7e" + remainingSec + "s \u00A7cremaining."
-					), true);
+							"\u00A7cBloodforged on cooldown! \u00A7e" + remainingSec + "s \u00A7cremaining."), true);
 					return;
 				}
 				bloodforgedCooldowns.put(player.getUUID(), now);
 				player.addEffect(new net.minecraft.world.effect.MobEffectInstance(
 						net.minecraft.world.effect.MobEffects.INSTANT_HEALTH, 1, 1, false, false));
 				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7c\u2764 Bloodforged Iron Body pulses with healing energy!"
-				));
+						"\u00A76[Cradle] \u00A7c\u2764 Bloodforged Iron Body pulses with healing energy!"));
 			} else {
-				// Steelborn / Raindrop are toggles
 				boolean newState = !data.isIronBodyActive();
 				data.setIronBodyActive(newState);
-
-				if (newState) {
-					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A7a" + data.getIronBody().displayName() +
-									" Iron Body activated."
-					));
-				} else {
-					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A77Iron Body deactivated."
-					));
-				}
+				player.sendSystemMessage(Component.literal(newState
+						? "\u00A76[Cradle] \u00A7a" + data.getIronBody().displayName() + " Iron Body activated."
+						: "\u00A76[Cradle] \u00A77Iron Body deactivated."));
 			}
-
-			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
+			sync(player, data);
 		});
 
-		// Handle Enforcer technique activation from the client (player pressed R)
-		// Toggles the Enforcer technique on/off. Requires Copper stage or higher.
+		// Handle Enforcer technique (Z key toggle). Requires Copper+.
 		ServerPlayNetworking.registerGlobalReceiver(UseEnforcerPayload.TYPE, (payload, context) -> {
 			ServerPlayer player = context.player();
 			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
 
-			// Must have chosen a path
-			if (!data.hasChosenPath() || data.getChosenPath() == CradlePlayerData.Path.UNSET) {
-				player.displayClientMessage(Component.literal(
-						"\u00A7cYou haven't chosen a path yet."
-				), true);
-				return;
-			}
+			if (requiresPath(player, data)) return;
+			if (requiresStage(player, data, CradlePlayerData.AdvancementStage.COPPER, "Enforcer")) return;
 
-			// Must be at least Copper stage to use Enforcer
-			if (data.getAdvancementStage().ordinal() < CradlePlayerData.AdvancementStage.COPPER.ordinal()) {
-				player.displayClientMessage(Component.literal(
-						"\u00A7cEnforcer techniques require Copper stage or higher."
-				), true);
-				return;
-			}
-
-			// Toggle
 			if (data.isEnforcerActive()) {
 				CyclingManager.deactivateEnforcer(player, data);
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A77Enforcer technique deactivated."
-				));
+				player.sendSystemMessage(Component.literal("\u00A76[Cradle] \u00A77Enforcer technique deactivated."));
 			} else {
-				// Check if player has Madra
 				if (data.getCurrentMadra() <= 0) {
-					player.displayClientMessage(Component.literal(
-							"\u00A7cNot enough Madra to activate Enforcer technique!"
-					), true);
+					player.displayClientMessage(Component.literal("\u00A7cNot enough Madra!"), true);
 					return;
 				}
-
-				// Below Low Gold, using techniques disrupts cycling
-				if (data.isActivelyCycling() && !CyclingManager.canCycleWhileUsingAbilities(data)) {
-					CyclingManager.stopCycling(player, data);
-					player.displayClientMessage(Component.literal(
-							"\u00A7eYour cycling is disrupted by the technique!"
-					), true);
-				}
-
+				disruptCyclingIfNeeded(player, data);
 				CyclingManager.activateEnforcer(player, data);
 
-				// Send path-specific activation message
-				String techniqueName = switch (data.getChosenPath()) {
-					case BLACK_FLAME -> "Burning Body";
-					case ENDLESS_SWORD -> "Flowing Edge";
-					case STELLAR_SPEAR -> "Stellar Alignment";
-					case CLOUD_HAMMER -> "Thunderous Weight";
-					case HOLLOW_KING -> "Hollow Circulation";
-					default -> "Enforcer Technique";
-				};
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7a" + techniqueName + " activated!"
-				));
+				String name = getEnforcerName(data.getChosenPath());
+				player.sendSystemMessage(Component.literal("\u00A76[Cradle] \u00A7a" + name + " activated!"));
 			}
-
-			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
+			sync(player, data);
 		});
 
-		// Handle Striker technique from the client (player pressed X)
-		// Fires a projectile. Available at Foundation. Costs Madra. Has cooldown.
+		// Handle Striker technique (X key). Available at Foundation. Costs Madra + has cooldown.
 		ServerPlayNetworking.registerGlobalReceiver(UseStrikerPayload.TYPE, (payload, context) -> {
 			ServerPlayer player = context.player();
 			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
 
-			// Must have chosen a path
-			if (!data.hasChosenPath() || data.getChosenPath() == CradlePlayerData.Path.UNSET) {
-				player.displayClientMessage(Component.literal(
-						"\u00A7cYou haven't chosen a path yet."
-				), true);
-				return;
-			}
+			if (requiresPath(player, data)) return;
 
 			// Cooldown check (scaled by advancement stage)
 			long now = System.currentTimeMillis();
@@ -418,14 +316,6 @@ public class CradleMod implements ModInitializer {
 				return;
 			}
 
-			// Below Low Gold, using techniques disrupts cycling
-			if (data.isActivelyCycling() && !CyclingManager.canCycleWhileUsingAbilities(data)) {
-				CyclingManager.stopCycling(player, data);
-				player.displayClientMessage(Component.literal(
-						"\u00A7eYour cycling is disrupted by the technique!"
-				), true);
-			}
-
 			// Madra cost (graduated discount by stage)
 			float cost = STRIKER_MADRA_COST * data.getMadraCostMultiplier();
 			if (data.getCurrentMadra() < cost) {
@@ -435,93 +325,77 @@ public class CradleMod implements ModInitializer {
 				return;
 			}
 
-			// Deduct Madra and set cooldown
+			disruptCyclingIfNeeded(player, data);
+
+			// Deduct Madra, set cooldown, fire projectile
 			data.setCurrentMadra(data.getCurrentMadra() - cost);
 			strikerCooldowns.put(player.getUUID(), now);
 
-			// Spawn the projectile
 			ServerLevel serverLevel = (ServerLevel) player.level();
 			Vec3 look = player.getLookAngle();
-			float powerMult = data.getAbilityPowerMultiplier();
-
 			StrikerProjectileEntity projectile = new StrikerProjectileEntity(
-					serverLevel, player, look, data.getChosenPath(), powerMult);
-
-			// Position at eye height, slightly forward
+					serverLevel, player, look, data.getChosenPath(), data.getAbilityPowerMultiplier());
 			projectile.setPos(
 					player.getX() + look.x * 0.5,
 					player.getEyeY() - 0.1,
-					player.getZ() + look.z * 0.5
-			);
-
+					player.getZ() + look.z * 0.5);
 			Projectile.spawnProjectileUsingShoot(
 					projectile, serverLevel, ItemStack.EMPTY,
-					look.x, look.y, look.z,
-					1.5f,  // speed
-					0.0f   // divergence (perfectly accurate)
-			);
+					look.x, look.y, look.z, 1.5f, 0.0f);
 
-			// Sync updated Madra to client
-			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
+			sync(player, data);
 		});
 
-		// Handle Ruler technique from the client (player pressed C)
-		// Toggles area effect on/off. Requires Copper stage or higher. Drains Madra while active.
+		// Handle Ruler technique (C key toggle). Requires Copper+.
 		ServerPlayNetworking.registerGlobalReceiver(UseRulerPayload.TYPE, (payload, context) -> {
 			ServerPlayer player = context.player();
 			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
 
-			if (!data.hasChosenPath() || data.getChosenPath() == CradlePlayerData.Path.UNSET) {
-				player.displayClientMessage(Component.literal(
-						"\u00A7cYou haven't chosen a path yet."
-				), true);
-				return;
-			}
-
-			if (data.getAdvancementStage().ordinal() < CradlePlayerData.AdvancementStage.COPPER.ordinal()) {
-				player.displayClientMessage(Component.literal(
-						"\u00A7cRuler techniques require Copper stage or higher."
-				), true);
-				return;
-			}
+			if (requiresPath(player, data)) return;
+			if (requiresStage(player, data, CradlePlayerData.AdvancementStage.COPPER, "Ruler")) return;
 
 			if (data.isRulerActive()) {
 				data.setRulerActive(false);
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A77Ruler technique deactivated."
-				));
+				player.sendSystemMessage(Component.literal("\u00A76[Cradle] \u00A77Ruler technique deactivated."));
 			} else {
 				if (data.getCurrentMadra() <= 0) {
-					player.displayClientMessage(Component.literal(
-							"\u00A7cNot enough Madra to activate Ruler technique!"
-					), true);
+					player.displayClientMessage(Component.literal("\u00A7cNot enough Madra!"), true);
 					return;
 				}
-
-				// Below Low Gold, using techniques disrupts cycling
-				if (data.isActivelyCycling() && !CyclingManager.canCycleWhileUsingAbilities(data)) {
-					CyclingManager.stopCycling(player, data);
-					player.displayClientMessage(Component.literal(
-							"\u00A7eYour cycling is disrupted by the technique!"
-					), true);
-				}
-
+				disruptCyclingIfNeeded(player, data);
 				data.setRulerActive(true);
 
-				String techniqueName = switch (data.getChosenPath()) {
-					case BLACK_FLAME -> "Domain of Ash";
-					case ENDLESS_SWORD -> "Field of Blades";
-					case STELLAR_SPEAR -> "Spear Domain";
-					case CLOUD_HAMMER -> "Gravity Field";
-					case HOLLOW_KING -> "Hollow Domain";
-					default -> "Ruler Technique";
-				};
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7a" + techniqueName + " activated!"
-				));
+				String name = getRulerName(data.getChosenPath());
+				player.sendSystemMessage(Component.literal("\u00A76[Cradle] \u00A7a" + name + " activated!"));
 			}
+			sync(player, data);
+		});
 
-			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
+		// Sword-stabbing cycling: right-click soft block with sword (Endless Sword / Stellar Spear)
+		UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
+			if (world.isClientSide() || !(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
+			if (!player.getItemInHand(hand).is(ItemTags.SWORDS)) return InteractionResult.PASS;
+
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+			if (!data.isSwordPath()) return InteractionResult.PASS;
+			if (!CyclingManager.isSoftBlock(world.getBlockState(hitResult.getBlockPos()))) return InteractionResult.PASS;
+
+			if (data.isSwordCycling()) {
+				data.setSwordCycling(false);
+				player.displayClientMessage(Component.literal("\u00A77You pull your blade free."), true);
+			} else {
+				data.setSwordCycling(true);
+				if (!data.isActivelyCycling()) {
+					CyclingManager.startCycling(sp, data);
+					sp.displayClientMessage(Component.literal(
+							"\u00A7fYou drive your blade into the earth and begin cycling."), true);
+				} else {
+					player.displayClientMessage(Component.literal(
+							"\u00A7bYour blade channels the earth's aura. Cycling intensifies."), true);
+				}
+			}
+			sync(sp, data);
+			return InteractionResult.SUCCESS;
 		});
 
 		// Load player data BEFORE players can join (SERVER_STARTING fires before
@@ -579,25 +453,16 @@ public class CradleMod implements ModInitializer {
 			}
 		});
 
-		// Clean up player state and save when a player disconnects
+		// Clean up player state and save on disconnect
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
 			ServerPlayer player = handler.getPlayer();
 			CradlePlayerData data = CradlePlayerData.get(player.getUUID());
 			if (data != null) {
-				// Deactivate enforcer so attribute modifiers are cleaned up
-				if (data.isEnforcerActive()) {
-					CyclingManager.deactivateEnforcer(player, data);
-				}
-				// Deactivate ruler
+				if (data.isEnforcerActive()) CyclingManager.deactivateEnforcer(player, data);
 				data.setRulerActive(false);
-				// Deactivate iron body toggle
 				data.setIronBodyActive(false);
-				// Stop cycling
-				if (data.isActivelyCycling()) {
-					CyclingManager.stopCycling(player, data);
-				}
+				if (data.isActivelyCycling()) CyclingManager.stopCycling(player, data);
 			}
-			// Cancel any active revelation trial (cleanup spirits)
 			RevelationTrialManager.cancelTrial(player.getUUID());
 			autoSave(server);
 		});
@@ -608,18 +473,80 @@ public class CradleMod implements ModInitializer {
 		});
 	}
 
-	/**
-	 * Saves all player data to the world folder.
-	 * Called periodically (every 30s), on player disconnect, on key events, and on server stop.
-	 */
-	public static void autoSave(MinecraftServer server) {
-		if (CradlePlayerData.getAll().isEmpty()) {
-			return; // Nothing to save
+	// ── Technique name lookups ────────────────────────────────────────
+
+	private static String getEnforcerName(CradlePlayerData.Path path) {
+		return switch (path) {
+			case BLACK_FLAME -> "Burning Body";
+			case ENDLESS_SWORD -> "Flowing Edge";
+			case STELLAR_SPEAR -> "Stellar Alignment";
+			case CLOUD_HAMMER -> "Thunderous Weight";
+			case HOLLOW_KING -> "Hollow Circulation";
+			default -> "Enforcer Technique";
+		};
+	}
+
+	private static String getRulerName(CradlePlayerData.Path path) {
+		return switch (path) {
+			case BLACK_FLAME -> "Domain of Ash";
+			case ENDLESS_SWORD -> "Field of Blades";
+			case STELLAR_SPEAR -> "Spear Domain";
+			case CLOUD_HAMMER -> "Gravity Field";
+			case HOLLOW_KING -> "Hollow Domain";
+			default -> "Ruler Technique";
+		};
+	}
+
+	// ── Shared validation helpers ────────────────────────────────────
+
+	/** Returns true (and sends action-bar error) if the player hasn't chosen a path. */
+	private static boolean requiresPath(ServerPlayer player, CradlePlayerData data) {
+		if (!data.hasChosenPath() || data.getChosenPath() == CradlePlayerData.Path.UNSET) {
+			player.displayClientMessage(Component.literal("\u00A7cYou haven't chosen a path yet."), true);
+			return true;
 		}
+		return false;
+	}
+
+	/** Returns true (and sends action-bar error) if the player is below the required stage. */
+	private static boolean requiresStage(ServerPlayer player, CradlePlayerData data,
+										  CradlePlayerData.AdvancementStage minStage, String techniqueName) {
+		if (data.getAdvancementStage().ordinal() < minStage.ordinal()) {
+			player.displayClientMessage(Component.literal(
+					"\u00A7c" + techniqueName + " techniques require " + minStage.displayName() + " stage or higher."
+			), true);
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * If cycling is active and the player can't multi-task at their stage,
+	 * stops cycling and warns them. Returns true if cycling was disrupted.
+	 */
+	private static boolean disruptCyclingIfNeeded(ServerPlayer player, CradlePlayerData data) {
+		if (data.isActivelyCycling() && !CyclingManager.canCycleWhileUsingAbilities(data)) {
+			CyclingManager.stopCycling(player, data);
+			player.displayClientMessage(Component.literal(
+					"\u00A7eYour cycling is disrupted by the technique!"
+			), true);
+			return true;
+		}
+		return false;
+	}
+
+	/** Sends a sync packet to the client. */
+	private static void sync(ServerPlayer player, CradlePlayerData data) {
+		ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
+	}
+
+	// ── Persistence ──────────────────────────────────────────────────
+
+	public static void autoSave(MinecraftServer server) {
+		if (CradlePlayerData.getAll().isEmpty()) return;
 		Path dataFile = server.getWorldPath(LevelResource.ROOT).resolve(DATA_FILE_NAME);
 		try {
-			CompoundTag root = CradlePlayerData.saveAll();
-			NbtIo.writeCompressed(root, dataFile);
+			NbtIo.writeCompressed(CradlePlayerData.saveAll(), dataFile);
 		} catch (IOException e) {
 			LOGGER.error("Failed to auto-save Cradle player data!", e);
 		}
