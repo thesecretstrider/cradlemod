@@ -339,6 +339,28 @@ public final class CradlePlayerData {
 		};
 	}
 
+	/**
+	 * Returns the ability cooldown multiplier for the current advancement stage.
+	 * Higher stages have shorter cooldowns. Mirrors the cost curve but goes
+	 * lower at the top end — cooldown reduction is very impactful.
+	 */
+	public float getCooldownMultiplier() {
+		return switch (advancementStage) {
+			case FOUNDATION -> 1.0f;
+			case COPPER -> 0.95f;
+			case IRON -> 0.9f;
+			case JADE -> 0.85f;
+			case LOW_GOLD -> 0.8f;
+			case HIGH_GOLD -> 0.75f;
+			case TRUEGOLD -> 0.7f;
+			case UNDERLORD -> 0.6f;
+			case OVERLORD -> 0.5f;
+			case ARCHLORD -> 0.45f;
+			case SAGE, HERALD -> 0.4f;
+			case MONARCH -> 0.3f;
+		};
+	}
+
 	// ── NBT persistence ────────────────────────────────────────────────
 
 	public CompoundTag toNbt() {

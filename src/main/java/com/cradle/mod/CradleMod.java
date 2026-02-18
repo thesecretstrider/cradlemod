@@ -393,11 +393,12 @@ public class CradleMod implements ModInitializer {
 				return;
 			}
 
-			// Cooldown check
+			// Cooldown check (scaled by advancement stage)
 			long now = System.currentTimeMillis();
 			Long lastUse = strikerCooldowns.get(player.getUUID());
-			if (lastUse != null && now - lastUse < STRIKER_COOLDOWN_MS) {
-				long remainingMs = STRIKER_COOLDOWN_MS - (now - lastUse);
+			long effectiveCooldown = (long) (STRIKER_COOLDOWN_MS * data.getCooldownMultiplier());
+			if (lastUse != null && now - lastUse < effectiveCooldown) {
+				long remainingMs = effectiveCooldown - (now - lastUse);
 				double remainingSec = Math.ceil(remainingMs / 100.0) / 10.0;
 				player.sendSystemMessage(Component.literal(
 						"\u00A76[Cradle] \u00A7cStriker on cooldown! \u00A7e" + String.format("%.1f", remainingSec) + "s \u00A7cremaining."
