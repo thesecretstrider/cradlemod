@@ -273,9 +273,9 @@ public final class BreakthroughManager {
 
 		// Block if already in a trial
 		if (RevelationTrialManager.isInTrial(player.getUUID())) {
-			player.sendSystemMessage(Component.literal(
-					"\u00A76[Cradle] \u00A7cYou are already undergoing a revelation trial!"
-			));
+			player.displayClientMessage(Component.literal(
+					"\u00A7cYou are already undergoing a revelation trial!"
+			), true);
 			return false;
 		}
 

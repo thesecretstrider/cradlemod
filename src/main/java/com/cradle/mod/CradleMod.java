@@ -172,9 +172,9 @@ public class CradleMod implements ModInitializer {
 
 			boolean success = BreakthroughManager.attemptBreakthrough(player, data);
 			if (!success) {
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7cYou do not meet the requirements to advance."
-				));
+				player.displayClientMessage(Component.literal(
+						"\u00A7cYou do not meet the requirements to advance."
+				), true);
 			} else {
 				// Save immediately — breakthrough is critical data
 				autoSave(player.level().getServer());
@@ -191,25 +191,25 @@ public class CradleMod implements ModInitializer {
 
 			// Validate: must be at Archlord stage
 			if (data.getAdvancementStage() != CradlePlayerData.AdvancementStage.ARCHLORD) {
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7cYou must be at Archlord to make this choice."
-				));
+				player.displayClientMessage(Component.literal(
+						"\u00A7cYou must be at Archlord to make this choice."
+				), true);
 				return;
 			}
 
 			// Validate: must have reached level requirement
 			if (data.getPlayerLevel() < 350) {
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7cYou must reach Level 350 to advance beyond Archlord."
-				));
+				player.displayClientMessage(Component.literal(
+						"\u00A7cYou must reach Level 350 to advance beyond Archlord."
+				), true);
 				return;
 			}
 
 			// Validate: hasn't already chosen
 			if (data.hasSage() || data.hasHerald()) {
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7cYou have already made your choice."
-				));
+				player.displayClientMessage(Component.literal(
+						"\u00A7cYou have already made your choice."
+				), true);
 				return;
 			}
 
@@ -256,9 +256,9 @@ public class CradleMod implements ModInitializer {
 				// Below Low Gold, can't cycle while a technique is active
 				if (!CyclingManager.canCycleWhileUsingAbilities(data)
 						&& (data.isEnforcerActive() || data.isRulerActive())) {
-					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A7cYou can't cycle while a technique is active!"
-					));
+					player.displayClientMessage(Component.literal(
+							"\u00A7cYou can't cycle while a technique is active!"
+					), true);
 					ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
 					return;
 				}
@@ -280,9 +280,9 @@ public class CradleMod implements ModInitializer {
 			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
 
 			if (data.getIronBody() == CradlePlayerData.IronBody.NONE) {
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7cYou don't have an Iron Body."
-				));
+				player.displayClientMessage(Component.literal(
+						"\u00A7cYou don't have an Iron Body."
+				), true);
 				return;
 			}
 
@@ -293,9 +293,9 @@ public class CradleMod implements ModInitializer {
 				if (lastUse != null && now - lastUse < BLOODFORGED_COOLDOWN_MS) {
 					long remainingMs = BLOODFORGED_COOLDOWN_MS - (now - lastUse);
 					int remainingSec = (int) Math.ceil(remainingMs / 1000.0);
-					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A7cBloodforged heal on cooldown! \u00A7e" + remainingSec + "s \u00A7cremaining."
-					));
+					player.displayClientMessage(Component.literal(
+							"\u00A7cBloodforged heal on cooldown! \u00A7e" + remainingSec + "s \u00A7cremaining."
+					), true);
 					return;
 				}
 				bloodforgedCooldowns.put(player.getUUID(), now);
@@ -332,17 +332,17 @@ public class CradleMod implements ModInitializer {
 
 			// Must have chosen a path
 			if (!data.hasChosenPath() || data.getChosenPath() == CradlePlayerData.Path.UNSET) {
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7cYou haven't chosen a path yet."
-				));
+				player.displayClientMessage(Component.literal(
+						"\u00A7cYou haven't chosen a path yet."
+				), true);
 				return;
 			}
 
 			// Must be at least Copper stage to use Enforcer
 			if (data.getAdvancementStage().ordinal() < CradlePlayerData.AdvancementStage.COPPER.ordinal()) {
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7cEnforcer techniques require Copper stage or higher."
-				));
+				player.displayClientMessage(Component.literal(
+						"\u00A7cEnforcer techniques require Copper stage or higher."
+				), true);
 				return;
 			}
 
@@ -355,18 +355,18 @@ public class CradleMod implements ModInitializer {
 			} else {
 				// Check if player has Madra
 				if (data.getCurrentMadra() <= 0) {
-					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A7cNot enough Madra to activate Enforcer technique!"
-					));
+					player.displayClientMessage(Component.literal(
+							"\u00A7cNot enough Madra to activate Enforcer technique!"
+					), true);
 					return;
 				}
 
 				// Below Low Gold, using techniques disrupts cycling
 				if (data.isActivelyCycling() && !CyclingManager.canCycleWhileUsingAbilities(data)) {
 					CyclingManager.stopCycling(player, data);
-					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A7eYour cycling is disrupted by the technique!"
-					));
+					player.displayClientMessage(Component.literal(
+							"\u00A7eYour cycling is disrupted by the technique!"
+					), true);
 				}
 
 				CyclingManager.activateEnforcer(player, data);
@@ -396,17 +396,17 @@ public class CradleMod implements ModInitializer {
 
 			// Must have chosen a path
 			if (!data.hasChosenPath() || data.getChosenPath() == CradlePlayerData.Path.UNSET) {
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7cYou haven't chosen a path yet."
-				));
+				player.displayClientMessage(Component.literal(
+						"\u00A7cYou haven't chosen a path yet."
+				), true);
 				return;
 			}
 
 			// Must be at least Copper stage to use Striker
 			if (data.getAdvancementStage().ordinal() < CradlePlayerData.AdvancementStage.COPPER.ordinal()) {
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7cStriker techniques require Copper stage or higher."
-				));
+				player.displayClientMessage(Component.literal(
+						"\u00A7cStriker techniques require Copper stage or higher."
+				), true);
 				return;
 			}
 
@@ -417,26 +417,26 @@ public class CradleMod implements ModInitializer {
 			if (lastUse != null && now - lastUse < effectiveCooldown) {
 				long remainingMs = effectiveCooldown - (now - lastUse);
 				double remainingSec = Math.ceil(remainingMs / 100.0) / 10.0;
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7cStriker on cooldown! \u00A7e" + String.format("%.1f", remainingSec) + "s \u00A7cremaining."
-				));
+				player.displayClientMessage(Component.literal(
+						"\u00A7cStriker on cooldown! \u00A7e" + String.format("%.1f", remainingSec) + "s \u00A7cremaining."
+				), true);
 				return;
 			}
 
 			// Below Low Gold, using techniques disrupts cycling
 			if (data.isActivelyCycling() && !CyclingManager.canCycleWhileUsingAbilities(data)) {
 				CyclingManager.stopCycling(player, data);
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7eYour cycling is disrupted by the technique!"
-				));
+				player.displayClientMessage(Component.literal(
+						"\u00A7eYour cycling is disrupted by the technique!"
+				), true);
 			}
 
 			// Madra cost (graduated discount by stage)
 			float cost = STRIKER_MADRA_COST * data.getMadraCostMultiplier();
 			if (data.getCurrentMadra() < cost) {
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7cNot enough Madra! Need \u00A7e" + String.format("%.0f", cost) + "\u00A7c."
-				));
+				player.displayClientMessage(Component.literal(
+						"\u00A7cNot enough Madra! Need \u00A7e" + String.format("%.0f", cost) + "\u00A7c."
+				), true);
 				return;
 			}
 
@@ -477,16 +477,16 @@ public class CradleMod implements ModInitializer {
 			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
 
 			if (!data.hasChosenPath() || data.getChosenPath() == CradlePlayerData.Path.UNSET) {
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7cYou haven't chosen a path yet."
-				));
+				player.displayClientMessage(Component.literal(
+						"\u00A7cYou haven't chosen a path yet."
+				), true);
 				return;
 			}
 
 			if (data.getAdvancementStage().ordinal() < CradlePlayerData.AdvancementStage.COPPER.ordinal()) {
-				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7cRuler techniques require Copper stage or higher."
-				));
+				player.displayClientMessage(Component.literal(
+						"\u00A7cRuler techniques require Copper stage or higher."
+				), true);
 				return;
 			}
 
@@ -497,18 +497,18 @@ public class CradleMod implements ModInitializer {
 				));
 			} else {
 				if (data.getCurrentMadra() <= 0) {
-					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A7cNot enough Madra to activate Ruler technique!"
-					));
+					player.displayClientMessage(Component.literal(
+							"\u00A7cNot enough Madra to activate Ruler technique!"
+					), true);
 					return;
 				}
 
 				// Below Low Gold, using techniques disrupts cycling
 				if (data.isActivelyCycling() && !CyclingManager.canCycleWhileUsingAbilities(data)) {
 					CyclingManager.stopCycling(player, data);
-					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A7eYour cycling is disrupted by the technique!"
-					));
+					player.displayClientMessage(Component.literal(
+							"\u00A7eYour cycling is disrupted by the technique!"
+					), true);
 				}
 
 				data.setRulerActive(true);

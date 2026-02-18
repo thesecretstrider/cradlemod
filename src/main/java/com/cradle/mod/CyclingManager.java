@@ -132,9 +132,9 @@ public final class CyclingManager {
 				// If out of Madra, deactivate Enforcer
 				if (data.getCurrentMadra() <= 0) {
 					deactivateEnforcer(player, data);
-					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A7cEnforcer technique deactivated — out of Madra!"
-					));
+					player.displayClientMessage(Component.literal(
+							"\u00A7cEnforcer deactivated — out of Madra!"
+					), true);
 				} else {
 					// Apply path-specific effects
 					applyEnforcerEffects(player, data);
@@ -149,9 +149,9 @@ public final class CyclingManager {
 				if (data.getCurrentMadra() <= 0) {
 					data.setRulerActive(false);
 					RULER_EFFECT_TICKS.remove(playerId);
-					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A7cRuler technique deactivated — out of Madra!"
-					));
+					player.displayClientMessage(Component.literal(
+							"\u00A7cRuler deactivated — out of Madra!"
+					), true);
 				} else {
 					// Apply area effects every RULER_EFFECT_INTERVAL ticks
 					int rulerTick = RULER_EFFECT_TICKS.getOrDefault(playerId, 0) + 1;
@@ -174,9 +174,9 @@ public final class CyclingManager {
 						double dz = Math.abs(player.getZ() - startPos[1]);
 						if (dx > MOVE_THRESHOLD || dz > MOVE_THRESHOLD) {
 							stopCycling(player, data);
-							player.sendSystemMessage(Component.literal(
-									"§6[Cradle] §fYou moved and stopped cycling."
-							));
+							player.displayClientMessage(Component.literal(
+									"\u00A7fYou moved and stopped cycling."
+							), true);
 							// Still send sync this tick so client sees the change
 							ServerPlayNetworking.send(player, createSyncPayload(player, data));
 							continue;

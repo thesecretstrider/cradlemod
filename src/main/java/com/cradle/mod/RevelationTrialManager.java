@@ -79,9 +79,9 @@ public final class RevelationTrialManager {
 
 		// Don't allow multiple concurrent trials
 		if (isInTrial(playerId)) {
-			player.sendSystemMessage(Component.literal(
-					"\u00A76[Cradle] \u00A7cYou are already undergoing a revelation trial!"
-			));
+			player.displayClientMessage(Component.literal(
+					"\u00A7cYou are already undergoing a revelation trial!"
+			), true);
 			return;
 		}
 
