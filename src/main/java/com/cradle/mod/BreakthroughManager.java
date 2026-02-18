@@ -375,13 +375,13 @@ public final class BreakthroughManager {
 			));
 		}
 
-		// Ability unlock message at Copper (first time techniques become available)
+		// Ability unlock message at Copper (Enforcer and Ruler unlock here; Striker is available from Foundation)
 		if (nextStage == CradlePlayerData.AdvancementStage.COPPER) {
 			player.sendSystemMessage(Component.literal(
-					"\u00A76[Cradle] \u00A7a\u2694 Enforcer, Striker, and Ruler techniques are now available!"
+					"\u00A76[Cradle] \u00A7a\u2694 Enforcer and Ruler techniques are now available!"
 			));
 			player.sendSystemMessage(Component.literal(
-					"\u00A76[Cradle] \u00A77Use Z (Enforcer), X (Striker), C (Ruler) to channel your arts."
+					"\u00A76[Cradle] \u00A77Use Z (Enforcer), C (Ruler) to channel your arts."
 			));
 		}
 
@@ -433,7 +433,7 @@ public final class BreakthroughManager {
 	 */
 	public static String getBreakthroughNarrative(CradlePlayerData.AdvancementStage stage) {
 		return switch (stage) {
-			case COPPER -> "Your channels open for the first time. Aura flows through you like a river.";
+			case COPPER -> "Your channels grow stronger. Aura flows through you like a river.";
 			case IRON -> "Your body is forged anew. Flesh and bone are tempered by madra.";
 			case JADE -> "Your spirit awakens. You can sense the vital aura of all living things.";
 			case LOW_GOLD -> "You cycle remnant aura into your own spirit. Gold shines within you.";

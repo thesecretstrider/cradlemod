@@ -163,6 +163,9 @@ public class CradleMod implements ModInitializer {
 			player.sendSystemMessage(Component.literal(
 					"\u00A76[Cradle] \u00A77Begin cycling (G) to strengthen your madra channels."
 			));
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A7a\u2694 Striker technique unlocked! Press X to fire."
+			));
 		});
 
 		// Handle advancement attempt from the client (player clicked "Advance" button)
@@ -389,7 +392,7 @@ public class CradleMod implements ModInitializer {
 		});
 
 		// Handle Striker technique from the client (player pressed X)
-		// Fires a projectile. Requires Iron stage or higher. Costs Madra. Has cooldown.
+		// Fires a projectile. Available at Foundation. Costs Madra. Has cooldown.
 		ServerPlayNetworking.registerGlobalReceiver(UseStrikerPayload.TYPE, (payload, context) -> {
 			ServerPlayer player = context.player();
 			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
@@ -398,14 +401,6 @@ public class CradleMod implements ModInitializer {
 			if (!data.hasChosenPath() || data.getChosenPath() == CradlePlayerData.Path.UNSET) {
 				player.displayClientMessage(Component.literal(
 						"\u00A7cYou haven't chosen a path yet."
-				), true);
-				return;
-			}
-
-			// Must be at least Copper stage to use Striker
-			if (data.getAdvancementStage().ordinal() < CradlePlayerData.AdvancementStage.COPPER.ordinal()) {
-				player.displayClientMessage(Component.literal(
-						"\u00A7cStriker techniques require Copper stage or higher."
 				), true);
 				return;
 			}
