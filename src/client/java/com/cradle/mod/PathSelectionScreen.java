@@ -36,11 +36,11 @@ public class PathSelectionScreen extends Screen {
 	};
 
 	private static final String[] DESCRIPTIONS = {
-			"Destructive fire and overwhelming force. Burn everything.",
-			"Precise blades and cutting intent. A thousand swords.",
-			"Blinding light and piercing strikes. Strike like starlight.",
-			"Raw power and unbreakable defense. Crush like thunder.",
-			"Pure madra manipulation. Master the essence of power."
+			"The fire that devours all. Blackflame destroys everything in its path — including you.",
+			"A thousand invisible blades answer your will. Cut through anything that stands before you.",
+			"Starlight given form. Pierce the heavens and let nothing stand between you and your target.",
+			"Thunder and weight made manifest. Crush your enemies with the force of a storm.",
+			"Pure madra, unaspected and absolute. The power to negate, absorb, and command all aura."
 	};
 
 	private static final int[] PATH_COLORS = {

@@ -67,6 +67,13 @@ public final class ClientCradleData {
 	}
 
 	/**
+	 * Returns true if the player has chosen a path (not UNSET).
+	 */
+	public static boolean hasChosenPath() {
+		return !"UNSET".equals(path);
+	}
+
+	/**
 	 * Returns the ARGB color for the current advancement stage.
 	 * Used by the Madra bar and info screen.
 	 */

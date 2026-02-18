@@ -321,9 +321,22 @@ public final class BreakthroughManager {
 						"\u00A76[Cradle] \u00A7d" + bodyType.displayName() +
 								" Iron Body awakened!"
 				));
+				// Iron Body lore flavor
+				String ironBodyLore = switch (bodyType) {
+					case BLOODFORGED -> "Pain fuels your restoration. Every wound makes you stronger.";
+					case STEELBORN -> "Your body hardens like sacred iron. Blows glance off your skin.";
+					case RAINDROP -> "You flow like water. Your reflexes sharpen beyond mortal limits.";
+					default -> "";
+				};
+				if (!ironBodyLore.isEmpty()) {
+					player.sendSystemMessage(Component.literal(
+							"\u00A76[Cradle] \u00A7d\u00A7o" + ironBodyLore
+					));
+				}
 			} else {
 				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A77You advance without an Iron Body."
+						"\u00A76[Cradle] \u00A77You advance to Iron without a body crystal. " +
+						"Your body is strong, but lacks the refinement of an Iron Body."
 				));
 			}
 		}
@@ -353,6 +366,24 @@ public final class BreakthroughManager {
 		player.sendSystemMessage(Component.literal(
 				"\u00A76[Cradle] \u00A7fYour Madra has been purified. Your power grows denser..."
 		));
+
+		// Stage-specific lore narrative
+		String narrative = getBreakthroughNarrative(nextStage);
+		if (!narrative.isEmpty()) {
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A7d\u00A7o" + narrative
+			));
+		}
+
+		// Ability unlock message at Copper (first time techniques become available)
+		if (nextStage == CradlePlayerData.AdvancementStage.COPPER) {
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A7a\u2694 Enforcer, Striker, and Ruler techniques are now available!"
+			));
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A77Use Z (Enforcer), X (Striker), C (Ruler) to channel your arts."
+			));
+		}
 
 		CradleMod.LOGGER.info("Player {} broke through to {} at level {}",
 				player.getName().getString(), nextStage.name(), data.getPlayerLevel());
@@ -395,6 +426,27 @@ public final class BreakthroughManager {
 		} else if (player.getOffhandItem().is(crystal)) {
 			player.getOffhandItem().shrink(1);
 		}
+	}
+
+	/**
+	 * Returns a lore-appropriate narrative string for the given breakthrough stage.
+	 */
+	public static String getBreakthroughNarrative(CradlePlayerData.AdvancementStage stage) {
+		return switch (stage) {
+			case COPPER -> "Your channels open for the first time. Aura flows through you like a river.";
+			case IRON -> "Your body is forged anew. Flesh and bone are tempered by madra.";
+			case JADE -> "Your spirit awakens. You can sense the vital aura of all living things.";
+			case LOW_GOLD -> "You cycle remnant aura into your own spirit. Gold shines within you.";
+			case HIGH_GOLD -> "Your madra grows denser, more potent. The boundary of Gold deepens.";
+			case TRUEGOLD -> "Your spirit is perfected at the Gold stage. You stand at the threshold of power.";
+			case UNDERLORD -> "You look within and find your truth. The soul ignites with revelation.";
+			case OVERLORD -> "You impose your will upon your madra. Your power obeys your intent alone.";
+			case ARCHLORD -> "Your authority extends beyond yourself. The world bends to your command.";
+			case SAGE -> "You touch the Way and speak with the voice of creation. Icons bow before your will.";
+			case HERALD -> "Your spirit and body merge as one. You are no longer bound by mortal form.";
+			case MONARCH -> "You stand at the peak of Cradle. None can challenge your dominion.";
+			default -> "";
+		};
 	}
 
 	/**

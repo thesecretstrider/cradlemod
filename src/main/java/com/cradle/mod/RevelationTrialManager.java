@@ -112,13 +112,23 @@ public final class RevelationTrialManager {
 
 		ACTIVE_TRIALS.put(playerId, trial);
 
-		// Notify player
+		// Notify player with stage-specific lore
+		String trialDescription = switch (targetStage) {
+			case UNDERLORD -> "The spirits of your past doubts manifest. Face yourself to find your truth.";
+			case OVERLORD -> "Phantoms of your deepest fears take form. Impose your will upon them.";
+			case ARCHLORD -> "The wraiths of all who fell short before you rise. Prove your authority.";
+			default -> "Spirits appear to test your resolve.";
+		};
+
 		player.sendSystemMessage(Component.literal(
-				"\u00A76[Cradle] \u00A7d\u2694 Your revelation begins... defeat the spirits to prove your worth!"
+				"\u00A76[Cradle] \u00A7d\u2694 The revelation begins..."
 		));
 		player.sendSystemMessage(Component.literal(
-				"\u00A76[Cradle] \u00A77Kill all " + spiritCount + " spirits to advance to " +
-						targetStage.displayName() + "!"
+				"\u00A76[Cradle] \u00A7d\u00A7o" + trialDescription
+		));
+		player.sendSystemMessage(Component.literal(
+				"\u00A76[Cradle] \u00A77Defeat all " + spiritCount + " spirits to advance to " +
+						targetStage.displayName() + "."
 		));
 
 		CradleMod.LOGGER.info("Player {} started {} revelation trial ({} spirits)",
@@ -151,7 +161,7 @@ public final class RevelationTrialManager {
 					Math.pow(player.getZ() - trial.originZ, 2)
 			);
 			if (dist > MAX_DISTANCE) {
-				failTrial(player, trial, "You fled too far from your revelation...");
+				failTrial(player, trial, "You fled from your own revelation... The truth cannot be outrun.");
 				continue;
 			}
 
@@ -181,7 +191,7 @@ public final class RevelationTrialManager {
 		if (entity instanceof ServerPlayer player) {
 			RevelationTrial trial = ACTIVE_TRIALS.get(player.getUUID());
 			if (trial != null) {
-				failTrial(player, trial, "Your revelation was incomplete... You must try again.");
+				failTrial(player, trial, "Your revelation was incomplete... The spirits consume your doubt. You must try again.");
 			}
 		}
 	}
@@ -264,6 +274,10 @@ public final class RevelationTrialManager {
 
 	private static void completeTrial(ServerPlayer player, RevelationTrial trial) {
 		ACTIVE_TRIALS.remove(trial.playerId);
+
+		player.sendSystemMessage(Component.literal(
+				"\u00A76[Cradle] \u00A7d\u00A7oThe spirits fade. Your revelation is complete."
+		));
 
 		CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
 

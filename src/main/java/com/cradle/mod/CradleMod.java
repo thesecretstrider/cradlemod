@@ -142,9 +142,26 @@ public class CradleMod implements ModInitializer {
 			// Sync updated data to client
 			ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
 
-			// Send confirmation chat message
+			// Send confirmation chat message with path-specific lore
 			player.sendSystemMessage(Component.literal(
-					"\u00A76[Cradle] \u00A7fYou have chosen the \u00A7e" + path.displayName() + "\u00A7f!"
+					"\u00A76[Cradle] \u00A76You have chosen the \u00A7e" + path.displayName() + "\u00A76!"
+			));
+
+			String pathLore = switch (path) {
+				case BLACK_FLAME -> "The destroyer's path. Blackflame madra burns through all defenses.";
+				case ENDLESS_SWORD -> "The swordsman's path. Your spirit sharpens into a weapon beyond steel.";
+				case STELLAR_SPEAR -> "The piercing path. Light and precision guide your every strike.";
+				case CLOUD_HAMMER -> "The juggernaut's path. You carry the weight of storms in your fists.";
+				case HOLLOW_KING -> "The purist's path. Your madra is unaspected — versatile and unyielding.";
+				default -> "";
+			};
+			if (!pathLore.isEmpty()) {
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7d\u00A7o" + pathLore
+				));
+			}
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A77Begin cycling (G) to strengthen your madra channels."
 			));
 		});
 
@@ -205,16 +222,16 @@ public class CradleMod implements ModInitializer {
 						"\u00A76[Cradle] \u00A7b\u2728 You have touched the Way and become a Sage! \u2728"
 				));
 				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7fReality bends to your will. The Authority is yours to command."
+						"\u00A76[Cradle] \u00A7b\u00A7oThe Icon appears above you. Reality itself acknowledges your authority."
 				));
 			} else if ("HERALD".equals(choice)) {
 				data.setHasHerald(true);
 				data.setAdvancementStage(CradlePlayerData.AdvancementStage.HERALD);
 				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7d\u2728 Your body transcends mortal limits! You are now a Herald! \u2728"
+						"\u00A76[Cradle] \u00A7d\u2728 Your spirit merges with your body. You are now a Herald! \u2728"
 				));
 				player.sendSystemMessage(Component.literal(
-						"\u00A76[Cradle] \u00A7fYour physical form is reforged. Mountains tremble at your strength."
+						"\u00A76[Cradle] \u00A7d\u00A7oYour flesh transcends mortality. You are reborn in the image of your spirit."
 				));
 			} else {
 				return; // Invalid choice — ignore
