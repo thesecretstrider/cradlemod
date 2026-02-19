@@ -1,12 +1,12 @@
 package com.cradle.mod;
 
+import java.util.Random;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.world.level.Level;
-
-import java.util.Random;
 
 /**
  * Client-side particle spawning while the player is actively cycling.
