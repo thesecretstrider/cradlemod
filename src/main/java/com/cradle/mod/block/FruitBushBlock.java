@@ -42,19 +42,17 @@ public class FruitBushBlock extends BushBlock {
 
 	@Override
 	protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
-		// Check parent conditions first (must be on dirt/grass/etc.)
-		if (!super.canSurvive(state, level, pos)) {
-			return false;
-		}
+		// Only require valid soil (dirt/grass/etc.) — spawn exclusion is handled by worldgen only
+		return super.canSurvive(state, level, pos);
+	}
 
-		// Block generation near world origin (spawn area)
-		// Uses horizontal distance only (ignores Y)
+	/**
+	 * Check if this position is outside the spawn exclusion radius.
+	 * Used by worldgen to prevent natural generation near spawn.
+	 */
+	public static boolean isOutsideSpawnExclusion(BlockPos pos) {
 		double distSq = (double) pos.getX() * pos.getX() + (double) pos.getZ() * pos.getZ();
-		if (distSq < (double) SPAWN_EXCLUSION_RADIUS * SPAWN_EXCLUSION_RADIUS) {
-			return false;
-		}
-
-		return true;
+		return distSq >= (double) SPAWN_EXCLUSION_RADIUS * SPAWN_EXCLUSION_RADIUS;
 	}
 
 	@Override

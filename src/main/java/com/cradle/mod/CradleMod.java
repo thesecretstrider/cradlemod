@@ -434,8 +434,12 @@ public class CradleMod implements ModInitializer {
 		// Revelation trial manager — checks trial progress (spirit kills, distance leash)
 		ServerTickEvents.END_SERVER_TICK.register(RevelationTrialManager::onServerTick);
 
-		// Bloodforged crystal — chance to spawn when a player kills a mob
+		// Mob kill: grant combat XP + chance to spawn Bloodforged crystal
 		ServerEntityCombatEvents.AFTER_KILLED_OTHER_ENTITY.register((level, attacker, killed, damageSource) -> {
+			if (attacker instanceof ServerPlayer player) {
+				CyclingManager.grantCombatXp(player, killed);
+				sync(player, CradlePlayerData.getOrCreate(player.getUUID()));
+			}
 			CrystalSpawnManager.onEntityKilled(level, attacker, killed);
 		});
 

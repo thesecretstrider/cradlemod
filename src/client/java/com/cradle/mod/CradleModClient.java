@@ -8,11 +8,14 @@ import com.cradle.mod.network.UseEnforcerPayload;
 import com.cradle.mod.network.UseStrikerPayload;
 import com.cradle.mod.network.UseRulerPayload;
 import com.cradle.mod.network.ToggleCyclingPayload;
+import com.cradle.mod.block.CradleBlocks;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.StrikerProjectileRenderer;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.rendering.v1.BlockRenderLayerMap;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
+import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -90,6 +93,12 @@ public class CradleModClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		// ── Register block render layers (cutout for transparency) ──
+		BlockRenderLayerMap.putBlocks(ChunkSectionLayer.CUTOUT,
+				CradleBlocks.VITAL_FRUIT_BUSH, CradleBlocks.SPIRIT_FRUIT_BUSH,
+				CradleBlocks.BLOODFORGED_CRYSTAL, CradleBlocks.STEELBORN_CRYSTAL,
+				CradleBlocks.RAINDROP_CRYSTAL);
+
 		// ── Register entity renderers ────────────────────────────────
 		EntityRendererRegistry.register(CradleEntities.STRIKER_PROJECTILE, StrikerProjectileRenderer::new);
 

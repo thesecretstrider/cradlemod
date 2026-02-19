@@ -64,6 +64,9 @@ public final class CyclingManager {
 	// Only applies to sword paths (Endless Sword, Stellar Spear)
 	private static final float SWORD_CYCLING_MULTIPLIER = 2.0f;
 
+	// Combat XP: granted per point of mob max health on kill (e.g. zombie with 20hp = 100 XP)
+	private static final float COMBAT_XP_PER_HP = 5.0f;
+
 	// Environmental cycling bonus: applied when cycling near path-specific environment
 	private static final float ENVIRONMENTAL_BONUS = 1.5f;
 	// How often to check environment (every N ticks) — avoids scanning blocks every tick
@@ -505,6 +508,56 @@ public final class CyclingManager {
 		CradleMod.autoSave(player.level().getServer());
 
 		CradleMod.LOGGER.info("Player {} leveled up to {}", player.getName().getString(), data.getPlayerLevel());
+	}
+
+	// ── Combat XP ─────────────────────────────────────────────────────
+
+	/**
+	 * Grants cycling XP for killing a mob. XP scales with the mob's max health
+	 * and the player's cycling speed multiplier. Respects breakthrough level cap.
+	 */
+	public static void grantCombatXp(ServerPlayer player, LivingEntity killed) {
+		CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+
+		// XP based on mob toughness (max health) scaled by stage multiplier
+		float maxHp = killed.getMaxHealth();
+		int xpGain = (int) (maxHp * COMBAT_XP_PER_HP * data.getCyclingSpeedMultiplier());
+		if (xpGain <= 0) return;
+
+		// Check breakthrough cap
+		int nextBreakthroughLevel = BreakthroughManager.getNextBreakthroughLevel(data);
+		boolean atCap = nextBreakthroughLevel > 0 && data.getPlayerLevel() >= nextBreakthroughLevel;
+		if (atCap) return; // No XP when capped at breakthrough
+
+		data.setCyclingXp(data.getCyclingXp() + xpGain);
+
+		// Small Madra restore on kill (10% of max health as Madra)
+		float madraGain = maxHp * 0.1f;
+		data.setCurrentMadra(Math.min(data.getCurrentMadra() + madraGain, data.getMaxMadra()));
+
+		// Check for level-up (may chain multiple levels for big kills)
+		boolean leveled = false;
+		while (!atCap) {
+			int xpNeeded = xpToNextLevel(data.getPlayerLevel());
+			if (data.getCyclingXp() >= xpNeeded) {
+				levelUp(player, data);
+				BreakthroughManager.checkBreakthrough(player, data);
+				leveled = true;
+				// Re-check cap after leveling
+				nextBreakthroughLevel = BreakthroughManager.getNextBreakthroughLevel(data);
+				atCap = nextBreakthroughLevel > 0 && data.getPlayerLevel() >= nextBreakthroughLevel;
+			} else {
+				break;
+			}
+		}
+
+		// Cap XP if at breakthrough
+		if (atCap) {
+			int xpNeeded = xpToNextLevel(data.getPlayerLevel());
+			if (data.getCyclingXp() > xpNeeded) {
+				data.setCyclingXp(xpNeeded);
+			}
+		}
 	}
 
 	// ── Environmental cycling bonus ───────────────────────────────────
