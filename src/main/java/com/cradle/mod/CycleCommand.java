@@ -198,6 +198,23 @@ public final class CycleCommand {
 										return 0;
 									}
 								})))
+
+				// /cycle setwillpower <amount>
+				.then(Commands.literal("setwillpower")
+						.requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+						.then(Commands.argument("amount", IntegerArgumentType.integer(0))
+								.executes(ctx -> {
+									ServerPlayer player = ctx.getSource().getPlayerOrException();
+									CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+									int amount = IntegerArgumentType.getInteger(ctx, "amount");
+
+									data.setCurrentWillpower(amount);
+									ctx.getSource().sendSuccess(
+											() -> Component.literal("§6[Cradle] §fWillpower set to §e" + String.format("%.1f", data.getCurrentWillpower())),
+											true
+									);
+									return 1;
+								})))
 		);
 	}
 }

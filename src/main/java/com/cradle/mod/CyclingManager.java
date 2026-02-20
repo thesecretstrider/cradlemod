@@ -76,6 +76,10 @@ public final class CyclingManager {
 	// Cached environment bonus per player (updated every ENVIRONMENT_CHECK_INTERVAL)
 	private static final Map<UUID, Float> CACHED_ENV_BONUS = new HashMap<>();
 
+	// Flight: particle spawn interval (every N ticks while flying)
+	private static final int FLIGHT_PARTICLE_INTERVAL = 5;
+	private static final Map<UUID, Integer> FLIGHT_PARTICLE_TICKS = new HashMap<>();
+
 	// Tracks player position when they start cycling (for movement detection)
 	private static final Map<UUID, double[]> CYCLING_POSITIONS = new HashMap<>();
 
@@ -130,6 +134,39 @@ public final class CyclingManager {
 					case RAINDROP -> refreshEffect(player, MobEffects.SPEED, 60, 0);
 					default -> {}
 				}
+			}
+
+			// ── Flight tick (Underlord+ / Cloud Hammer Copper+) ─────────
+			boolean canFly = data.canFly();
+			if (data.isUnderlordFlying()) {
+				if (!canFly) {
+					// Stage was lowered — revoke flight
+					disableFlight(player, data);
+				} else if (player.getAbilities().flying) {
+					// Actually airborne and flying — drain madra
+					float drain = data.getFlightMadraDrain();
+					data.setCurrentMadra(data.getCurrentMadra() - drain);
+					if (data.getCurrentMadra() <= 0) {
+						disableFlight(player, data);
+						player.displayClientMessage(Component.literal(
+								"\u00A7cFlight deactivated \u2014 out of Madra!"), true);
+					} else {
+						// Path-colored particles below feet every 5 ticks
+						int pTick = FLIGHT_PARTICLE_TICKS.getOrDefault(playerId, 0) + 1;
+						FLIGHT_PARTICLE_TICKS.put(playerId, pTick);
+						if (pTick >= FLIGHT_PARTICLE_INTERVAL) {
+							FLIGHT_PARTICLE_TICKS.put(playerId, 0);
+							((ServerLevel) player.level()).sendParticles(
+									net.minecraft.core.particles.ParticleTypes.END_ROD,
+									player.getX(), player.getY() - 0.5, player.getZ(),
+									3, 0.2, 0.0, 0.2, 0.01);
+						}
+					}
+				}
+				// If on ground (not actually flying), don't drain — just keep mayfly enabled
+			} else if (canFly && !player.isCreative() && !player.isSpectator()) {
+				// Auto-grant flight capability when stage requirement is met
+				enableFlight(player, data);
 			}
 
 			// ── Enforcer technique tick (R key toggle) ──────────────────
@@ -314,6 +351,34 @@ public final class CyclingManager {
 		ENVIRONMENT_CHECK_TICKS.remove(player.getUUID());
 		CACHED_ENV_BONUS.remove(player.getUUID());
 		player.removeEffect(MobEffects.GLOWING);
+	}
+
+	// ── Flight management ─────────────────────────────────────────
+
+	/**
+	 * Grants flight capability (mayfly) to the player.
+	 * Does NOT force the player into flight — they must double-tap jump.
+	 */
+	public static void enableFlight(ServerPlayer player, CradlePlayerData data) {
+		if (!player.isCreative() && !player.isSpectator()) {
+			player.getAbilities().mayfly = true;
+			player.onUpdateAbilities();
+		}
+		data.setUnderlordFlying(true);
+	}
+
+	/**
+	 * Revokes flight capability and forces the player out of flight.
+	 * Safe to call even if the player is in creative/spectator.
+	 */
+	public static void disableFlight(ServerPlayer player, CradlePlayerData data) {
+		data.setUnderlordFlying(false);
+		FLIGHT_PARTICLE_TICKS.remove(player.getUUID());
+		if (!player.isCreative() && !player.isSpectator()) {
+			player.getAbilities().mayfly = false;
+			player.getAbilities().flying = false;
+			player.onUpdateAbilities();
+		}
 	}
 
 	// ── Enforcer technique management ─────────────────────────────────
@@ -660,9 +725,12 @@ public final class CyclingManager {
 						data.isRulerActive(),
 						data.hasSage(),
 						data.hasHerald(),
-						data.isSwordCycling()
+						data.isSwordCycling(),
+						data.isUnderlordFlying()
 				),
-				data.getIronBody().name()
+				data.getIronBody().name(),
+				data.getCurrentWillpower(),
+				data.getMaxWillpower()
 		);
 	}
 }

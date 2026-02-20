@@ -100,6 +100,10 @@ public class CradleMod implements ModInitializer {
 			ServerPlayer player = handler.getPlayer();
 			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
 			sync(player, data);
+			// Grant flight if the player's stage qualifies
+			if (data.canFly()) {
+				CyclingManager.enableFlight(player, data);
+			}
 			if (!data.hasChosenPath()) {
 				ServerPlayNetworking.send(player, new OpenPathSelectionPayload());
 			}
@@ -466,6 +470,7 @@ public class CradleMod implements ModInitializer {
 				data.setRulerActive(false);
 				data.setIronBodyActive(false);
 				if (data.isActivelyCycling()) CyclingManager.stopCycling(player, data);
+				if (data.isUnderlordFlying()) CyclingManager.disableFlight(player, data);
 			}
 			RevelationTrialManager.cancelTrial(player.getUUID());
 			autoSave(server);

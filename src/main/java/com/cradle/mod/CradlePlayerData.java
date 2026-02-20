@@ -146,8 +146,12 @@ public final class CradlePlayerData {
 	private boolean hasSage;
 	private boolean hasHerald;
 	private boolean swordCycling; // True when cycling with sword stabbed into soft block (Endless Sword / Stellar Spear)
+	private boolean underlordFlying; // Transient — true when flight is enabled (Underlord+ / Cloud Hammer Copper+)
+	private float currentWillpower;
+	private float maxWillpower;
 
 	private static final float DEFAULT_MAX_MADRA = 100.0f;
+	private static final float DEFAULT_MAX_WILLPOWER = 50.0f;
 
 	public CradlePlayerData() {
 		this.playerLevel = 0;
@@ -165,6 +169,9 @@ public final class CradlePlayerData {
 		this.hasSage = false;
 		this.hasHerald = false;
 		this.swordCycling = false;
+		this.underlordFlying = false;
+		this.currentWillpower = 0.0f;
+		this.maxWillpower = DEFAULT_MAX_WILLPOWER;
 	}
 
 	// ── Getters / setters ──────────────────────────────────────────────
@@ -289,6 +296,41 @@ public final class CradlePlayerData {
 		this.swordCycling = swordCycling;
 	}
 
+	public boolean isUnderlordFlying() {
+		return underlordFlying;
+	}
+
+	public void setUnderlordFlying(boolean underlordFlying) {
+		this.underlordFlying = underlordFlying;
+	}
+
+	public float getCurrentWillpower() {
+		return currentWillpower;
+	}
+
+	public void setCurrentWillpower(float currentWillpower) {
+		this.currentWillpower = Math.max(0, Math.min(currentWillpower, maxWillpower));
+	}
+
+	public float getMaxWillpower() {
+		return maxWillpower;
+	}
+
+	public void setMaxWillpower(float maxWillpower) {
+		this.maxWillpower = Math.max(0, maxWillpower);
+		if (this.currentWillpower > this.maxWillpower) {
+			this.currentWillpower = this.maxWillpower;
+		}
+	}
+
+	/**
+	 * Returns true if this player has unlocked willpower (Archlord+).
+	 * Willpower is the resource used for Sage Authority and Herald powers.
+	 */
+	public boolean hasWillpower() {
+		return advancementStage.ordinal() >= AdvancementStage.ARCHLORD.ordinal();
+	}
+
 	/**
 	 * Returns true if this path benefits from sword-stabbing cycling
 	 * (right-click sword into soft block for 2x cycling speed).
@@ -296,6 +338,28 @@ public final class CradlePlayerData {
 	 */
 	public boolean isSwordPath() {
 		return chosenPath == Path.ENDLESS_SWORD || chosenPath == Path.STELLAR_SPEAR;
+	}
+
+	/**
+	 * Returns true if this player's stage is high enough for flight.
+	 * Cloud Hammer (wind/storm path) unlocks flight at Copper.
+	 * All other paths unlock flight at Underlord.
+	 */
+	public boolean canFly() {
+		if (chosenPath == Path.CLOUD_HAMMER) {
+			return advancementStage.ordinal() >= AdvancementStage.COPPER.ordinal();
+		}
+		return advancementStage.ordinal() >= AdvancementStage.UNDERLORD.ordinal();
+	}
+
+	/**
+	 * Returns the madra drain per tick while flying.
+	 * Cloud Hammer drains less (wind is their element).
+	 * Scaled by the stage-based cost multiplier.
+	 */
+	public float getFlightMadraDrain() {
+		float base = (chosenPath == Path.CLOUD_HAMMER) ? 0.5f : 0.8f;
+		return base * getMadraCostMultiplier();
 	}
 
 	/**
@@ -394,6 +458,8 @@ public final class CradlePlayerData {
 		tag.putString("ironBody", ironBody.name());
 		tag.putBoolean("hasSage", hasSage);
 		tag.putBoolean("hasHerald", hasHerald);
+		tag.putFloat("currentWillpower", currentWillpower);
+		tag.putFloat("maxWillpower", maxWillpower);
 		return tag;
 	}
 
@@ -434,6 +500,12 @@ public final class CradlePlayerData {
 
 		data.hasSage = tag.getBooleanOr("hasSage", false);
 		data.hasHerald = tag.getBooleanOr("hasHerald", false);
+
+		data.currentWillpower = tag.getFloatOr("currentWillpower", 0.0f);
+		data.maxWillpower = tag.getFloatOr("maxWillpower", DEFAULT_MAX_WILLPOWER);
+		if (data.maxWillpower <= 0) {
+			data.maxWillpower = DEFAULT_MAX_WILLPOWER;
+		}
 
 		return data;
 	}

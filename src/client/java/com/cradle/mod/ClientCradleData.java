@@ -25,6 +25,9 @@ public final class ClientCradleData {
 	public static boolean rulerActive = false;
 	public static boolean hasSage = false;
 	public static boolean hasHerald = false;
+	public static boolean flying = false;
+	public static float currentWillpower = 0f;
+	public static float maxWillpower = 50f;
 
 	/**
 	 * Reset all client data to defaults. Called when disconnecting from a world
@@ -46,6 +49,9 @@ public final class ClientCradleData {
 		rulerActive = false;
 		hasSage = false;
 		hasHerald = false;
+		flying = false;
+		currentWillpower = 0f;
+		maxWillpower = 50f;
 	}
 
 	public static void update(CradleSyncPayload payload) {
@@ -64,6 +70,9 @@ public final class ClientCradleData {
 		rulerActive = payload.rulerActive();
 		hasSage = payload.hasSage();
 		hasHerald = payload.hasHerald();
+		flying = payload.flying();
+		currentWillpower = payload.currentWillpower();
+		maxWillpower = payload.maxWillpower();
 	}
 
 	/**
@@ -71,6 +80,16 @@ public final class ClientCradleData {
 	 */
 	public static boolean hasChosenPath() {
 		return !"UNSET".equals(path);
+	}
+
+	/**
+	 * Returns true if the player has unlocked willpower (Archlord+).
+	 */
+	public static boolean hasWillpower() {
+		return switch (stage) {
+			case "ARCHLORD", "SAGE", "HERALD", "MONARCH" -> true;
+			default -> false;
+		};
 	}
 
 	/**

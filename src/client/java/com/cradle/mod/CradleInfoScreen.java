@@ -126,6 +126,14 @@ public class CradleInfoScreen extends Screen {
 		}
 		y += 14;
 
+		// Willpower (Archlord+ only)
+		if (ClientCradleData.hasWillpower()) {
+			graphics.drawString(this.font, "Willpower:", panelLeft + 10, y, 0xFFAAAAAA);
+			String wpText = String.format("%.0f / %.0f", ClientCradleData.currentWillpower, ClientCradleData.maxWillpower);
+			graphics.drawString(this.font, wpText, panelLeft + 80, y, 0xFF6699FF);
+			y += 14;
+		}
+
 		// Enforcer technique
 		graphics.drawString(this.font, "Enforcer:", panelLeft + 10, y, 0xFFAAAAAA);
 		if (!"UNSET".equals(ClientCradleData.path)) {
