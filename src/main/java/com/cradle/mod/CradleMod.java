@@ -452,6 +452,9 @@ public class CradleMod implements ModInitializer {
 			RevelationTrialManager.onEntityDeath(entity);
 		});
 
+		// Cloud Hammer: wind cushions falls — Slow Falling applied when falling fast with madra
+		// (handled in CyclingManager.onServerTick via checkCloudHammerFallCushion)
+
 		// Auto-save player data periodically (every 5 minutes)
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
 			ticksSinceLastSave++;

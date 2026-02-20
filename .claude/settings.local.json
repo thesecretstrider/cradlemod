@@ -305,7 +305,12 @@
       "Bash(xxd:*)",
       "Bash(gradlew build:*)",
       "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap\" -classpath \"C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-common\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\minecraft-common-1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2.jar\" net.minecraft.world.item.SwordItem)",
-      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap\" -classpath \"C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-common\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\minecraft-common-1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2.jar\" net.minecraft.tags.ItemTags)"
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap\" -classpath \"C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-common\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\minecraft-common-1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2.jar\" net.minecraft.tags.ItemTags)",
+      "Bash(jar -tf:*)",
+      "WebFetch(domain:docs.fabricmc.net)",
+      "Bash(for variant in ashen black chestnut pale rusty snowy spotted striped woods)",
+      "Bash(do)",
+      "Bash(done)"
     ]
   }
 }

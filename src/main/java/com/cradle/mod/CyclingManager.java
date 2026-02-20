@@ -79,6 +79,10 @@ public final class CyclingManager {
 	// Flight: particle spawn interval (every N ticks while flying)
 	private static final int FLIGHT_PARTICLE_INTERVAL = 5;
 	private static final Map<UUID, Integer> FLIGHT_PARTICLE_TICKS = new HashMap<>();
+	// Tracks whether the player was actively flying last tick (for cushioned landing detection)
+	private static final Map<UUID, Boolean> WAS_FLYING_LAST_TICK = new HashMap<>();
+	// Slow Falling duration for cushioned landing (3 seconds = 60 ticks)
+	private static final int CUSHIONED_LANDING_DURATION = 60;
 
 	// Tracks player position when they start cycling (for movement detection)
 	private static final Map<UUID, double[]> CYCLING_POSITIONS = new HashMap<>();
@@ -138,15 +142,19 @@ public final class CyclingManager {
 
 			// ── Flight tick (Underlord+ / Cloud Hammer Copper+) ─────────
 			boolean canFly = data.canFly();
+			boolean wasFlying = WAS_FLYING_LAST_TICK.getOrDefault(playerId, false);
 			if (data.isUnderlordFlying()) {
+				boolean currentlyFlying = player.getAbilities().flying;
+
 				if (!canFly) {
-					// Stage was lowered — revoke flight
+					// Stage was lowered — revoke flight (no cushion)
 					disableFlight(player, data);
-				} else if (player.getAbilities().flying) {
+				} else if (currentlyFlying) {
 					// Actually airborne and flying — drain madra
 					float drain = data.getFlightMadraDrain();
 					data.setCurrentMadra(data.getCurrentMadra() - drain);
 					if (data.getCurrentMadra() <= 0) {
+						// Ran out of madra — hard fall, no cushion
 						disableFlight(player, data);
 						player.displayClientMessage(Component.literal(
 								"\u00A7cFlight deactivated \u2014 out of Madra!"), true);
@@ -162,11 +170,32 @@ public final class CyclingManager {
 									3, 0.2, 0.0, 0.2, 0.01);
 						}
 					}
+				} else if (wasFlying && !currentlyFlying) {
+					// Player voluntarily stopped flying (double-tap space or landed)
+					// Cushion the fall with Slow Falling — clouds break their descent
+					player.addEffect(new MobEffectInstance(
+							MobEffects.SLOW_FALLING, CUSHIONED_LANDING_DURATION, 0, false, true));
 				}
-				// If on ground (not actually flying), don't drain — just keep mayfly enabled
-			} else if (canFly && !player.isCreative() && !player.isSpectator()) {
-				// Auto-grant flight capability when stage requirement is met
-				enableFlight(player, data);
+
+				WAS_FLYING_LAST_TICK.put(playerId, currentlyFlying);
+			} else {
+				WAS_FLYING_LAST_TICK.remove(playerId);
+				if (canFly && !player.isCreative() && !player.isSpectator()) {
+					// Auto-grant flight capability when stage requirement is met
+					enableFlight(player, data);
+				}
+			}
+
+			// ── Cloud Hammer fall cushion (wind catches them before impact) ──
+			if (data.getChosenPath() == CradlePlayerData.Path.CLOUD_HAMMER
+					&& data.getCurrentMadra() > 0
+					&& !player.isCreative() && !player.isSpectator()) {
+				// fallDistance tracks how far the player has fallen (resets on landing)
+				// 3+ blocks of falling = would take fall damage. Apply Slow Falling to cushion.
+				if (player.fallDistance >= 3.0f && !player.hasEffect(MobEffects.SLOW_FALLING)) {
+					player.addEffect(new MobEffectInstance(
+							MobEffects.SLOW_FALLING, CUSHIONED_LANDING_DURATION, 0, false, true));
+				}
 			}
 
 			// ── Enforcer technique tick (R key toggle) ──────────────────
@@ -374,6 +403,7 @@ public final class CyclingManager {
 	public static void disableFlight(ServerPlayer player, CradlePlayerData data) {
 		data.setUnderlordFlying(false);
 		FLIGHT_PARTICLE_TICKS.remove(player.getUUID());
+		WAS_FLYING_LAST_TICK.remove(player.getUUID());
 		if (!player.isCreative() && !player.isSpectator()) {
 			player.getAbilities().mayfly = false;
 			player.getAbilities().flying = false;
