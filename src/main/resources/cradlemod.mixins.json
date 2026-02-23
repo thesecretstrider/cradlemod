@@ -3,7 +3,8 @@
 	"package": "com.cradle.mod.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
-		"CradleMixin"
+		"CradleMixin",
+		"DreadbeastWolfMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

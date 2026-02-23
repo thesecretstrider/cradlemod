@@ -129,18 +129,22 @@ public class StrikerProjectileEntity extends AbstractHurtingProjectile {
 		switch (path) {
 			case "BLACK_FLAME" -> {
 				// Explosive burst — big AoE, sets everything on fire
-				target.hurtServer(serverLevel, source, baseDamage);
+				// Ignite BEFORE damage — ensures cooked food drops (like Fire Aspect)
 				target.igniteForSeconds(4.0f);
+				target.hurtServer(serverLevel, source, baseDamage);
 				// Larger explosion radius for more splash
+				AABB blastArea = target.getBoundingBox().inflate(4.0);
 				List<LivingEntity> nearby = serverLevel.getEntitiesOfClass(
 						LivingEntity.class,
-						target.getBoundingBox().inflate(4.0),
+						blastArea,
 						e -> e != owner && e != target && e.isAlive()
 				);
 				for (LivingEntity e : nearby) {
+					e.igniteForSeconds(3.0f); // Ignite BEFORE damage
 					e.hurtServer(serverLevel, source, baseDamage * 0.6f);
-					e.igniteForSeconds(3.0f);
 				}
+				// Blackflame cooks any raw food items in the blast zone
+				com.cradle.mod.CyclingManager.cookNearbyItems(serverLevel, blastArea);
 				discard();
 			}
 

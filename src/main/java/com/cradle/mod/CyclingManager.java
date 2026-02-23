@@ -21,12 +21,19 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DirtPathBlock;
 import net.minecraft.world.level.block.GrassBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.CampfireCookingRecipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -523,20 +530,20 @@ public final class CyclingManager {
 	private static void applyRulerEffects(ServerPlayer player, CradlePlayerData data) {
 		float powerMult = data.getAbilityPowerMultiplier();
 		AABB area = player.getBoundingBox().inflate(RULER_RADIUS);
-		List<LivingEntity> enemies = player.level().getEntitiesOfClass(
-				LivingEntity.class, area, e -> e != player && e.isAlive() && !e.isAlliedTo(player));
-		if (enemies.isEmpty()) return;
-
 		ServerLevel level = player.level();
+		List<LivingEntity> enemies = level.getEntitiesOfClass(
+				LivingEntity.class, area, e -> e != player && e.isAlive() && !e.isAlliedTo(player));
 		boolean underlordPlus = powerMult >= 1.5f;
 
 		switch (data.getChosenPath()) {
 			case BLACK_FLAME -> {
 				float damage = 2.0f * powerMult;
 				for (LivingEntity e : enemies) {
+					e.igniteForSeconds(2.0f); // Ignite BEFORE damage — ensures cooked food drops
 					e.hurtServer(level, player.damageSources().magic(), damage);
-					e.igniteForSeconds(2.0f);
 				}
+				// Blackflame cooks any raw food items lying in the area
+				cookNearbyItems(level, area);
 			}
 			case ENDLESS_SWORD -> {
 				float damage = 1.5f * powerMult;
@@ -573,6 +580,40 @@ public final class CyclingManager {
 				}
 			}
 			default -> {}
+		}
+	}
+
+	// ── Blackflame cooking ────────────────────────────────────────────
+
+	/**
+	 * Converts any raw food item entities in the list to their cooked variant.
+	 * Uses campfire cooking recipes (same as vanilla campfires).
+	 * Blackflame burns hot enough to cook anything on contact.
+	 */
+	public static void cookNearbyItems(ServerLevel level, AABB area) {
+		List<ItemEntity> items = level.getEntitiesOfClass(
+				ItemEntity.class, area, ItemEntity::isAlive);
+		if (items.isEmpty()) return;
+
+		for (ItemEntity itemEntity : items) {
+			ItemStack rawStack = itemEntity.getItem();
+			if (rawStack.isEmpty()) continue;
+
+			SingleRecipeInput input = new SingleRecipeInput(rawStack);
+			Optional<RecipeHolder<CampfireCookingRecipe>> recipe =
+					level.recipeAccess().getRecipeFor(RecipeType.CAMPFIRE_COOKING, input, level);
+
+			if (recipe.isPresent()) {
+				ItemStack cooked = recipe.get().value().assemble(input, level.registryAccess());
+				cooked.setCount(rawStack.getCount());
+				itemEntity.setItem(cooked);
+
+				// Small flame particle burst to show the cooking
+				level.sendParticles(
+						net.minecraft.core.particles.ParticleTypes.FLAME,
+						itemEntity.getX(), itemEntity.getY() + 0.2, itemEntity.getZ(),
+						4, 0.15, 0.1, 0.15, 0.02);
+			}
 		}
 	}
 
