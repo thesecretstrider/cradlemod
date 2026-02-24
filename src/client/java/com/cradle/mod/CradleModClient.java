@@ -10,6 +10,7 @@ import com.cradle.mod.network.UseRulerPayload;
 import com.cradle.mod.network.ToggleCyclingPayload;
 import com.cradle.mod.network.UseSagePayload;
 import com.cradle.mod.network.UseHeraldPayload;
+import com.cradle.mod.network.OpenIconSelectionPayload;
 import com.cradle.mod.block.CradleBlocks;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.StrikerProjectileRenderer;
@@ -162,6 +163,15 @@ public class CradleModClient implements ClientModInitializer {
 						} else {
 							context.client().setScreen(new PathSelectionScreen());
 						}
+					});
+				}
+		);
+
+		// ── Networking: receive open-icon-selection packet ───────────
+		ClientPlayNetworking.registerGlobalReceiver(OpenIconSelectionPayload.TYPE,
+				(payload, context) -> {
+					context.client().execute(() -> {
+						context.client().setScreen(new IconSelectionScreen(payload.pathName(), payload.forMonarch()));
 					});
 				}
 		);

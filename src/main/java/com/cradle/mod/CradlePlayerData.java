@@ -3,6 +3,7 @@ package com.cradle.mod;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -104,6 +105,87 @@ public final class CradlePlayerData {
 		}
 	}
 
+	public enum Icon {
+		NONE,
+		DRAGON,
+		STRENGTH,
+		SWORD,
+		DEATH,
+		SPEAR,
+		HAMMER,
+		STORM,
+		VOID,
+		CROWN,
+		HEART,
+		SHIELD;
+
+		public String displayName() {
+			return switch (this) {
+				case NONE -> "None";
+				case DRAGON -> "Dragon";
+				case STRENGTH -> "Strength";
+				case SWORD -> "Sword";
+				case DEATH -> "Death";
+				case SPEAR -> "Spear";
+				case HAMMER -> "Hammer";
+				case STORM -> "Storm";
+				case VOID -> "Void";
+				case CROWN -> "Crown";
+				case HEART -> "Heart";
+				case SHIELD -> "Shield";
+			};
+		}
+
+		public String loreDescription() {
+			return switch (this) {
+				case NONE -> "";
+				case DRAGON -> "Embody primal fury and dominance. The Way recognizes you as a force of destruction.";
+				case STRENGTH -> "Embody raw physical might. The Way recognizes you as an unstoppable force.";
+				case SWORD -> "Embody the perfection of the blade. The Way recognizes you as one with the sword.";
+				case DEATH -> "Embody endings and finality. The Way recognizes you as the end of all things.";
+				case SPEAR -> "Embody precision and reach. The Way recognizes you as the point of the spear.";
+				case HAMMER -> "Embody crushing impact. The Way recognizes you as an unbreakable strike.";
+				case STORM -> "Embody wind and thunder. The Way recognizes you as the fury of the sky.";
+				case VOID -> "Embody emptiness and potential. The Way recognizes you as the space between things.";
+				case CROWN -> "Embody rulership and authority. The Way recognizes you as a sovereign.";
+				case HEART -> "Embody compassion and will. The Way recognizes you as a protector of all.";
+				case SHIELD -> "Embody defense and endurance. The Way recognizes you as an unbreakable wall.";
+			};
+		}
+
+		public int color() {
+			return switch (this) {
+				case NONE -> 0xFFC0C0C0;
+				case DRAGON -> 0xFFFF4400;
+				case STRENGTH -> 0xFFCC6600;
+				case SWORD -> 0xFFCCCCDD;
+				case DEATH -> 0xFF440044;
+				case SPEAR -> 0xFFFFDD44;
+				case HAMMER -> 0xFF888899;
+				case STORM -> 0xFF4466CC;
+				case VOID -> 0xFF220033;
+				case CROWN -> 0xFFFFD700;
+				case HEART -> 0xFFFF3366;
+				case SHIELD -> 0xFF66AACC;
+			};
+		}
+	}
+
+	/**
+	 * Returns the list of Icons available for a given path.
+	 * Each path has path-specific Icons plus the universal Heart and Shield.
+	 */
+	public static List<Icon> getAvailableIcons(Path path) {
+		return switch (path) {
+			case BLACK_FLAME -> List.of(Icon.DRAGON, Icon.STRENGTH, Icon.HEART, Icon.SHIELD);
+			case ENDLESS_SWORD -> List.of(Icon.SWORD, Icon.DEATH, Icon.HEART, Icon.SHIELD);
+			case STELLAR_SPEAR -> List.of(Icon.SPEAR, Icon.HEART, Icon.SHIELD);
+			case CLOUD_HAMMER -> List.of(Icon.HAMMER, Icon.STORM, Icon.HEART, Icon.SHIELD);
+			case HOLLOW_KING -> List.of(Icon.VOID, Icon.CROWN, Icon.HEART, Icon.SHIELD);
+			default -> List.of();
+		};
+	}
+
 	// ── Static player registry ─────────────────────────────────────────
 
 	private static final ConcurrentMap<UUID, CradlePlayerData> BY_PLAYER_ID = new ConcurrentHashMap<>();
@@ -145,6 +227,7 @@ public final class CradlePlayerData {
 	private boolean rulerActive;
 	private boolean hasSage;
 	private boolean hasHerald;
+	private Icon chosenIcon;
 	private boolean swordCycling; // True when cycling with sword stabbed into soft block (Endless Sword / Stellar Spear)
 	private boolean underlordFlying; // Transient — true when flight is enabled (Underlord+ / Cloud Hammer Copper+)
 	private boolean spiritShiftActive; // Transient — true when Herald Spirit Shift is active (B key)
@@ -169,6 +252,7 @@ public final class CradlePlayerData {
 		this.rulerActive = false;
 		this.hasSage = false;
 		this.hasHerald = false;
+		this.chosenIcon = Icon.NONE;
 		this.swordCycling = false;
 		this.underlordFlying = false;
 		this.currentWillpower = 0.0f;
@@ -287,6 +371,14 @@ public final class CradlePlayerData {
 
 	public void setHasHerald(boolean hasHerald) {
 		this.hasHerald = hasHerald;
+	}
+
+	public Icon getChosenIcon() {
+		return chosenIcon;
+	}
+
+	public void setChosenIcon(Icon icon) {
+		this.chosenIcon = Objects.requireNonNull(icon, "icon");
 	}
 
 	public boolean isSwordCycling() {
@@ -467,6 +559,7 @@ public final class CradlePlayerData {
 		tag.putString("ironBody", ironBody.name());
 		tag.putBoolean("hasSage", hasSage);
 		tag.putBoolean("hasHerald", hasHerald);
+		tag.putString("chosenIcon", chosenIcon.name());
 		tag.putFloat("currentWillpower", currentWillpower);
 		tag.putFloat("maxWillpower", maxWillpower);
 		return tag;
@@ -509,6 +602,12 @@ public final class CradlePlayerData {
 
 		data.hasSage = tag.getBooleanOr("hasSage", false);
 		data.hasHerald = tag.getBooleanOr("hasHerald", false);
+
+		try {
+			data.chosenIcon = Icon.valueOf(tag.getStringOr("chosenIcon", "NONE"));
+		} catch (IllegalArgumentException e) {
+			data.chosenIcon = Icon.NONE;
+		}
 
 		data.currentWillpower = tag.getFloatOr("currentWillpower", 0.0f);
 		data.maxWillpower = tag.getFloatOr("maxWillpower", DEFAULT_MAX_WILLPOWER);

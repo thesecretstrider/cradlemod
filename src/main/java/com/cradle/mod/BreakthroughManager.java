@@ -1,6 +1,8 @@
 package com.cradle.mod;
 
 import com.cradle.mod.item.CradleItems;
+import com.cradle.mod.network.OpenIconSelectionPayload;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
@@ -123,11 +125,9 @@ public final class BreakthroughManager {
 	 *
 	 * After Archlord:
 	 *   - If neither Sage nor Herald chosen: returns null (player must choose via UI)
-	 *   - If has Sage but not Herald: next is HERALD
-	 *   - If has Herald but not Sage: next is SAGE
-	 *   - If has both: next is MONARCH
-	 * At Sage: returns Herald (or Monarch if hasHerald)
-	 * At Herald: returns Sage (or Monarch if hasSage)
+	 *   - If has Sage or Herald: next is MONARCH (combines both into one step)
+	 * At Sage: next is MONARCH (Remnant fight required to gain Herald half)
+	 * At Herald: next is MONARCH (Icon touch required to gain Sage half)
 	 * At Monarch: returns null (max stage)
 	 * For all other stages: linear progression via next()
 	 */
@@ -139,32 +139,23 @@ public final class BreakthroughManager {
 		}
 
 		if (current == CradlePlayerData.AdvancementStage.ARCHLORD) {
-			// Branching: player must choose Sage or Herald
+			// Branching: player must choose Sage or Herald first
 			if (!data.hasSage() && !data.hasHerald()) {
 				return null; // Needs to choose via UI — handled by ChooseSageHeraldPayload
 			}
-			if (data.hasSage() && !data.hasHerald()) {
-				return CradlePlayerData.AdvancementStage.HERALD;
-			}
-			if (data.hasHerald() && !data.hasSage()) {
-				return CradlePlayerData.AdvancementStage.SAGE;
-			}
-			// Has both — next is Monarch
+			// After choosing one, next step is always Monarch
+			// (the missing half is acquired as part of the Monarch advancement)
 			return CradlePlayerData.AdvancementStage.MONARCH;
 		}
 
+		// Sage -> Monarch (must fight Remnant to gain Herald half)
 		if (current == CradlePlayerData.AdvancementStage.SAGE) {
-			if (data.hasHerald()) {
-				return CradlePlayerData.AdvancementStage.MONARCH;
-			}
-			return CradlePlayerData.AdvancementStage.HERALD;
+			return CradlePlayerData.AdvancementStage.MONARCH;
 		}
 
+		// Herald -> Monarch (must touch Icon to gain Sage half)
 		if (current == CradlePlayerData.AdvancementStage.HERALD) {
-			if (data.hasSage()) {
-				return CradlePlayerData.AdvancementStage.MONARCH;
-			}
-			return CradlePlayerData.AdvancementStage.SAGE;
+			return CradlePlayerData.AdvancementStage.MONARCH;
 		}
 
 		// Linear progression for all other stages
@@ -308,10 +299,25 @@ public final class BreakthroughManager {
 			return true; // Item consumed, trial started
 		}
 
-		// Herald advancement requires a Remnant fight (boss trial)
-		if (nextStage == CradlePlayerData.AdvancementStage.HERALD) {
-			RevelationTrialManager.startHeraldTrial(player, data);
-			return true; // Trial started
+		// Monarch advancement — requires the missing half:
+		// Sage player must fight their Remnant (Herald trial) to become Monarch.
+		// Herald player must choose an Icon (Sage half) to become Monarch.
+		if (nextStage == CradlePlayerData.AdvancementStage.MONARCH) {
+			if (data.hasSage() && !data.hasHerald()) {
+				// Sage → Monarch: must fight Remnant to merge body+spirit
+				RevelationTrialManager.startHeraldTrial(player, data);
+				return true; // Trial started — completion grants Monarch
+			}
+			if (data.hasHerald() && !data.hasSage()) {
+				// Herald → Monarch: must choose an Icon to gain Sage half
+				if (data.getChosenIcon() == CradlePlayerData.Icon.NONE) {
+					// Open Icon selection screen with forMonarch=true
+					ServerPlayNetworking.send(player,
+							new OpenIconSelectionPayload(data.getChosenPath().name(), true));
+					return true; // Awaiting Icon selection — ChooseIconPayload completes Monarch
+				}
+				// Already has Icon — fall through to performBreakthrough
+			}
 		}
 
 		// All other stages: instant breakthrough
@@ -336,7 +342,6 @@ public final class BreakthroughManager {
 						"\u00A76[Cradle] \u00A7d" + bodyType.displayName() +
 								" Iron Body awakened!"
 				));
-				// Iron Body lore flavor
 				String ironBodyLore = switch (bodyType) {
 					case BLOODFORGED -> "Pain fuels your restoration. Every wound makes you stronger.";
 					case STEELBORN -> "Your body hardens like sacred iron. Blows glance off your skin.";
@@ -361,6 +366,17 @@ public final class BreakthroughManager {
 			data.setHasSage(true);
 		} else if (nextStage == CradlePlayerData.AdvancementStage.HERALD) {
 			data.setHasHerald(true);
+		} else if (nextStage == CradlePlayerData.AdvancementStage.MONARCH) {
+			// Monarch = both Sage + Herald. Grant whichever is missing.
+			// Herald→Monarch path: player gains Sage (Icon) as part of ascending.
+			// Sage→Monarch path: Herald is granted by the Remnant trial completion.
+			if (!data.hasSage()) {
+				data.setHasSage(true);
+				data.setCurrentWillpower(data.getMaxWillpower());
+			}
+			if (!data.hasHerald()) {
+				data.setHasHerald(true);
+			}
 		}
 
 		// Advance stage
@@ -416,7 +432,7 @@ public final class BreakthroughManager {
 	 * Inspired by the End Portal opening — every player on the server sees and hears this.
 	 * Canon: When a Monarch is born, reality itself shakes. All of Cradle knows.
 	 */
-	private static void triggerMonarchWorldEvent(ServerPlayer monarch, CradlePlayerData data) {
+	public static void triggerMonarchWorldEvent(ServerPlayer monarch, CradlePlayerData data) {
 		var server = monarch.level().getServer();
 		if (server == null) return;
 

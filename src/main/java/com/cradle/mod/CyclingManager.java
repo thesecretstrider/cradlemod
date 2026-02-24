@@ -710,10 +710,10 @@ public final class CyclingManager {
 		// Increase max Madra with each level
 		data.setMaxMadra(data.getMaxMadra() + MADRA_PER_LEVEL);
 
-		// Tell the player
-		player.sendSystemMessage(Component.literal(
-				"§6[Cradle] §aLevel up! You are now level " + data.getPlayerLevel() + "!"
-		));
+		// Tell the player (action bar — not chat)
+		player.displayClientMessage(Component.literal(
+				"§6[Cradle] §aLevel up! You are now level §e" + data.getPlayerLevel() + "§a!"
+		), true);
 
 		// Save immediately — level-up is important progress
 		CradleMod.autoSave(player.level().getServer());
@@ -877,7 +877,8 @@ public final class CyclingManager {
 				),
 				data.getIronBody().name(),
 				data.getCurrentWillpower(),
-				data.getMaxWillpower()
+				data.getMaxWillpower(),
+				data.getChosenIcon().name()
 		);
 	}
 }

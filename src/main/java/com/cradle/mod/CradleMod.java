@@ -17,12 +17,15 @@ import com.cradle.mod.network.ToggleCyclingPayload;
 import com.cradle.mod.network.ChooseSageHeraldPayload;
 import com.cradle.mod.network.UseSagePayload;
 import com.cradle.mod.network.UseHeraldPayload;
+import com.cradle.mod.network.OpenIconSelectionPayload;
+import com.cradle.mod.network.ChooseIconPayload;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.StrikerProjectileEntity;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerEntityCombatEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
+import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -98,6 +101,7 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playS2C().register(CradleSyncPayload.TYPE, CradleSyncPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playS2C().register(OpenInfoScreenPayload.TYPE, OpenInfoScreenPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playS2C().register(OpenPathSelectionPayload.TYPE, OpenPathSelectionPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playS2C().register(OpenIconSelectionPayload.TYPE, OpenIconSelectionPayload.STREAM_CODEC);
 
 		// Register networking packets (client -> server)
 		PayloadTypeRegistry.playC2S().register(ChoosePathPayload.TYPE, ChoosePathPayload.STREAM_CODEC);
@@ -110,6 +114,7 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(ChooseSageHeraldPayload.TYPE, ChooseSageHeraldPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(UseSagePayload.TYPE, UseSagePayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(UseHeraldPayload.TYPE, UseHeraldPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(ChooseIconPayload.TYPE, ChooseIconPayload.STREAM_CODEC);
 
 		// Send initial data sync when a player joins, and open path selection if needed
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
@@ -212,15 +217,11 @@ public class CradleMod implements ModInitializer {
 
 			switch (payload.choice()) {
 				case "SAGE" -> {
-					data.setHasSage(true);
-					data.setAdvancementStage(CradlePlayerData.AdvancementStage.SAGE);
-					data.setCurrentWillpower(data.getMaxWillpower());
-					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A7b\u2728 You have touched an Icon. Reality itself acknowledges your will. \u2728"));
-					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A7b\u00A7oYou are reborn as a Sage. Authority flows through you."));
-					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A7bPress V to command Authority. Tap for Stop, hold for Kill."));
+					// Don't instantly become Sage — must choose an Icon first!
+					// Send the Icon selection screen to the client.
+					ServerPlayNetworking.send(player,
+							new OpenIconSelectionPayload(data.getChosenPath().name(), false));
+					return; // Don't save/sync yet — wait for ChooseIconPayload
 				}
 				case "HERALD" -> {
 					// Don't instantly become Herald — start the Remnant fight!
@@ -589,6 +590,75 @@ public class CradleMod implements ModInitializer {
 			sync(player, data);
 		});
 
+		// Handle Icon selection (from IconSelectionScreen). Validates and performs Sage or Monarch advancement.
+		ServerPlayNetworking.registerGlobalReceiver(ChooseIconPayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+
+			// Must be at Archlord (choosing Sage) or Herald (choosing Monarch via Icon)
+			CradlePlayerData.AdvancementStage stage = data.getAdvancementStage();
+			boolean isArchlord = stage == CradlePlayerData.AdvancementStage.ARCHLORD;
+			boolean isHerald = stage == CradlePlayerData.AdvancementStage.HERALD;
+			if (!isArchlord && !isHerald) {
+				player.displayClientMessage(Component.literal("\u00A7cYou cannot choose an Icon at this stage."), true);
+				return;
+			}
+
+			// Must not already have an Icon
+			if (data.getChosenIcon() != CradlePlayerData.Icon.NONE) {
+				player.displayClientMessage(Component.literal("\u00A7cYou have already manifested an Icon."), true);
+				return;
+			}
+
+			// Validate the Icon name
+			CradlePlayerData.Icon icon;
+			try {
+				icon = CradlePlayerData.Icon.valueOf(payload.iconName());
+			} catch (IllegalArgumentException e) {
+				return; // Invalid icon name — ignore
+			}
+			if (icon == CradlePlayerData.Icon.NONE) {
+				return;
+			}
+
+			// Validate the Icon is available for this path
+			java.util.List<CradlePlayerData.Icon> available = CradlePlayerData.getAvailableIcons(data.getChosenPath());
+			if (!available.contains(icon)) {
+				player.displayClientMessage(Component.literal("\u00A7cThat Icon is not available to your path."), true);
+				return;
+			}
+
+			// Set the chosen icon
+			data.setChosenIcon(icon);
+
+			// Spawn the Icon particle formation in the sky — visible to all nearby players
+			IconParticleDisplay.spawnIconDisplay(player, icon);
+
+			if (isHerald) {
+				// Herald choosing Icon → becomes Monarch
+				data.setHasSage(true);
+				data.setAdvancementStage(CradlePlayerData.AdvancementStage.MONARCH);
+				data.setCurrentWillpower(data.getMaxWillpower());
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7b\u2728 The " + icon.displayName() + " Icon burns in your soul. Reality acknowledges you. \u2728"));
+				BreakthroughManager.triggerMonarchWorldEvent(player, data);
+			} else {
+				// Archlord choosing Icon → becomes Sage
+				data.setHasSage(true);
+				data.setAdvancementStage(CradlePlayerData.AdvancementStage.SAGE);
+				data.setCurrentWillpower(data.getMaxWillpower());
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7b\u2728 The " + icon.displayName() + " Icon manifests above you. The Way itself recognizes your soul. \u2728"));
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7b\u00A7oYou are reborn as a Sage. Authority flows through you."));
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7bPress V to command Authority. Tap for Stop, hold for Kill."));
+			}
+
+			autoSave(player.level().getServer());
+			sync(player, data);
+		});
+
 		// Sword-stabbing cycling: right-click soft block with sword (Endless Sword / Stellar Spear)
 		UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
 			if (world.isClientSide() || !(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
@@ -671,6 +741,33 @@ public class CradleMod implements ModInitializer {
 					CyclingManager.deactivateSpiritShift(deadPlayer, deadData);
 				}
 			}
+		});
+
+		// Re-initialize player state after death+respawn.
+		// Minecraft creates a NEW ServerPlayer object on respawn — the old one is discarded.
+		// JOIN does NOT re-fire on respawn, so we must explicitly clean up transient state
+		// and re-grant flight/sync on the new entity.
+		ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> {
+			CradlePlayerData data = CradlePlayerData.get(newPlayer.getUUID());
+			if (data == null) return;
+
+			// Reset all transient ability states — player starts fresh after death
+			// (The old entity's attribute modifiers are gone; just clear the data flags)
+			data.setEnforcerActive(false);
+			data.setRulerActive(false);
+			data.setIronBodyActive(false);
+			data.setActivelyCycling(false);
+			data.setSwordCycling(false);
+			data.setUnderlordFlying(false);
+			data.setSpiritShiftActive(false);
+
+			// Re-grant flight capability if stage qualifies (sets mayfly on the NEW entity)
+			if (data.canFly()) {
+				CyclingManager.enableFlight(newPlayer, data);
+			}
+
+			// Sync all data to the new player entity so the client knows the current state
+			sync(newPlayer, data);
 		});
 
 		// Cloud Hammer: wind cushions falls — Slow Falling applied when falling fast with madra

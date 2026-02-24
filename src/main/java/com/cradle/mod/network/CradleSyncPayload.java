@@ -33,7 +33,8 @@ public record CradleSyncPayload(
 		int flags,
 		String ironBody,
 		float currentWillpower,
-		float maxWillpower
+		float maxWillpower,
+		String icon
 ) implements CustomPacketPayload {
 
 	// Flag bit constants
@@ -64,6 +65,7 @@ public record CradleSyncPayload(
 					ByteBufCodecs.STRING_UTF8, CradleSyncPayload::ironBody,
 					ByteBufCodecs.FLOAT, CradleSyncPayload::currentWillpower,
 					ByteBufCodecs.FLOAT, CradleSyncPayload::maxWillpower,
+					ByteBufCodecs.STRING_UTF8, CradleSyncPayload::icon,
 					CradleSyncPayload::new
 			);
 

@@ -384,28 +384,52 @@ public final class RevelationTrialManager {
 
 		if (trial.isHeraldTrial) {
 			// ── Herald Remnant trial completion ──
-			// Set Herald flag and stage
+			// Grant the Herald half
 			data.setHasHerald(true);
-			data.setAdvancementStage(CradlePlayerData.AdvancementStage.HERALD);
 
-			// Boost maxMadra
-			float boost = BreakthroughManager.getMaxMadraBoost(CradlePlayerData.AdvancementStage.HERALD);
+			// Determine final stage: if player is already a Sage, they become Monarch.
+			// If they chose Herald first at Archlord, they become Herald.
+			boolean becomesMonarch = data.hasSage();
+			CradlePlayerData.AdvancementStage finalStage = becomesMonarch
+					? CradlePlayerData.AdvancementStage.MONARCH
+					: CradlePlayerData.AdvancementStage.HERALD;
+
+			data.setAdvancementStage(finalStage);
+
+			// Boost maxMadra for the stage reached
+			float boost = BreakthroughManager.getMaxMadraBoost(finalStage);
 			data.setMaxMadra(data.getMaxMadra() + boost);
 			data.setCurrentMadra(data.getMaxMadra() * 0.25f);
 
-			// Grant willpower (same as Sage grants willpower)
+			// Grant willpower
 			data.setCurrentWillpower(data.getMaxWillpower());
 
-			// Herald lore messages
+			// Lore messages
 			player.sendSystemMessage(Component.literal(
-					"\u00A76[Cradle] \u00A7d\u2726 Your Remnant dissolves into you. Body and spirit become one. You are reborn as a Herald. \u2726"));
-			player.sendSystemMessage(Component.literal(
-					"\u00A76[Cradle] \u00A7d\u00A7oYour flesh transcends mortality. You walk between the physical and spiritual."));
-			player.sendSystemMessage(Component.literal(
-					"\u00A76[Cradle] \u00A7dPress B to shift between forms. Your Herald body grants you unmatched strength."));
+					"\u00A76[Cradle] \u00A7d\u2726 Your Remnant dissolves into you. Body and spirit become one. \u2726"));
 
-			CradleMod.LOGGER.info("Player {} completed Herald Remnant trial — now a Herald!",
-					player.getName().getString());
+			if (becomesMonarch) {
+				// Sage + Herald = Monarch!
+				data.setHasSage(true); // ensure both flags set
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7b\u00A7l\u2726 MONARCH! Sage and Herald, united in one being. You stand at the pinnacle. \u2726"));
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7bV for Authority. B for Spirit Shift. All power is yours."));
+
+				// Trigger the global Monarch world event
+				BreakthroughManager.triggerMonarchWorldEvent(player, data);
+
+				CradleMod.LOGGER.info("Player {} completed Herald Remnant trial — ascended to Monarch!",
+						player.getName().getString());
+			} else {
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7d\u00A7oYour flesh transcends mortality. You walk between the physical and spiritual."));
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7dPress B to shift between forms. Your Herald body grants you unmatched strength."));
+
+				CradleMod.LOGGER.info("Player {} completed Herald Remnant trial — now a Herald!",
+						player.getName().getString());
+			}
 		} else {
 			// ── Standard revelation trial completion ──
 			player.sendSystemMessage(Component.literal(

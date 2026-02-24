@@ -29,6 +29,7 @@ public final class ClientCradleData {
 	public static boolean spiritShiftActive = false;
 	public static float currentWillpower = 0f;
 	public static float maxWillpower = 50f;
+	public static String icon = "NONE";
 
 	/**
 	 * Reset all client data to defaults. Called when disconnecting from a world
@@ -54,6 +55,7 @@ public final class ClientCradleData {
 		spiritShiftActive = false;
 		currentWillpower = 0f;
 		maxWillpower = 50f;
+		icon = "NONE";
 	}
 
 	public static void update(CradleSyncPayload payload) {
@@ -76,6 +78,7 @@ public final class ClientCradleData {
 		spiritShiftActive = payload.spiritShiftActive();
 		currentWillpower = payload.currentWillpower();
 		maxWillpower = payload.maxWillpower();
+		icon = payload.icon();
 	}
 
 	/**
@@ -174,11 +177,11 @@ public final class ClientCradleData {
 				// At Archlord, player must choose Sage or Herald
 				// -2 signals the UI to show choice buttons instead of advance
 				if (!hasSage && !hasHerald) yield -2;
-				// If they've already picked one (shouldn't normally be at Archlord still), show 350
-				else yield 350;
+				// After choosing one, next is Monarch (400)
+				else yield 400;
 			}
-			case "SAGE" -> hasHerald ? 400 : 350; // needs Herald (350) or Monarch (400)
-			case "HERALD" -> hasSage ? 400 : 350;  // needs Sage (350) or Monarch (400)
+			case "SAGE" -> 400;   // Sage -> Monarch (fight Remnant)
+			case "HERALD" -> 400; // Herald -> Monarch (touch Icon)
 			case "MONARCH" -> -1;
 			default -> -1;
 		};
@@ -249,5 +252,52 @@ public final class ClientCradleData {
 			case "HOLLOW_KING" -> "Path of the Hollow King";
 			default -> path;
 		};
+	}
+
+	/**
+	 * Returns a human-readable display name for the current Icon.
+	 */
+	public static String getIconDisplayName() {
+		return switch (icon) {
+			case "DRAGON" -> "Dragon";
+			case "STRENGTH" -> "Strength";
+			case "SWORD" -> "Sword";
+			case "DEATH" -> "Death";
+			case "SPEAR" -> "Spear";
+			case "HAMMER" -> "Hammer";
+			case "STORM" -> "Storm";
+			case "VOID" -> "Void";
+			case "CROWN" -> "Crown";
+			case "HEART" -> "Heart";
+			case "SHIELD" -> "Shield";
+			default -> "None";
+		};
+	}
+
+	/**
+	 * Returns the ARGB color for the current Icon.
+	 */
+	public static int getIconColor() {
+		return switch (icon) {
+			case "DRAGON" -> 0xFFFF4400;
+			case "STRENGTH" -> 0xFFCC6600;
+			case "SWORD" -> 0xFFCCCCDD;
+			case "DEATH" -> 0xFF440044;
+			case "SPEAR" -> 0xFFFFDD44;
+			case "HAMMER" -> 0xFF888899;
+			case "STORM" -> 0xFF4466CC;
+			case "VOID" -> 0xFF220033;
+			case "CROWN" -> 0xFFFFD700;
+			case "HEART" -> 0xFFFF3366;
+			case "SHIELD" -> 0xFF66AACC;
+			default -> 0xFF999999;
+		};
+	}
+
+	/**
+	 * Returns true if the player has manifested an Icon.
+	 */
+	public static boolean hasIcon() {
+		return !"NONE".equals(icon);
 	}
 }

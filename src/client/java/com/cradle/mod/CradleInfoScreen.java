@@ -134,6 +134,14 @@ public class CradleInfoScreen extends Screen {
 			y += 14;
 		}
 
+		// Icon (Sage+ only)
+		if (ClientCradleData.hasIcon()) {
+			graphics.drawString(this.font, "Icon:", panelLeft + 10, y, 0xFFAAAAAA);
+			graphics.drawString(this.font, ClientCradleData.getIconDisplayName(),
+					panelLeft + 80, y, ClientCradleData.getIconColor());
+			y += 14;
+		}
+
 		// Enforcer technique
 		graphics.drawString(this.font, "Enforcer:", panelLeft + 10, y, 0xFFAAAAAA);
 		if (!"UNSET".equals(ClientCradleData.path)) {
