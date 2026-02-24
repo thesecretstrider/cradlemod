@@ -5,7 +5,8 @@
 	"client": [
 		"CradleClientMixin",
 		"GlowColorMixin",
-		"MadraBarMixin"
+		"MadraBarMixin",
+		"SpiritShiftMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
