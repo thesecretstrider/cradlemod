@@ -11,6 +11,8 @@ import com.cradle.mod.network.ToggleCyclingPayload;
 import com.cradle.mod.network.UseSagePayload;
 import com.cradle.mod.network.UseHeraldPayload;
 import com.cradle.mod.network.OpenIconSelectionPayload;
+import com.cradle.mod.network.DuelInviteReceivedPayload;
+import com.cradle.mod.network.DuelEndPayload;
 import com.cradle.mod.block.CradleBlocks;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.StrikerProjectileRenderer;
@@ -173,6 +175,23 @@ public class CradleModClient implements ClientModInitializer {
 					context.client().execute(() -> {
 						context.client().setScreen(new IconSelectionScreen(payload.pathName(), payload.forMonarch()));
 					});
+				}
+		);
+
+		// ── Networking: receive duel invite notification ────────────
+		// Server sends clickable chat messages directly; this handler is for
+		// future client-side enhancements (e.g., sound effects, overlay).
+		ClientPlayNetworking.registerGlobalReceiver(DuelInviteReceivedPayload.TYPE,
+				(payload, context) -> {
+					// Chat messages with clickable [Accept] [Decline] are sent server-side
+				}
+		);
+
+		// ── Networking: receive duel end notification ────────────────
+		ClientPlayNetworking.registerGlobalReceiver(DuelEndPayload.TYPE,
+				(payload, context) -> {
+					// Server already handles titles and chat; this payload can be used
+					// for future client-side stat display or duel history screen
 				}
 		);
 

@@ -19,6 +19,8 @@ import com.cradle.mod.network.UseSagePayload;
 import com.cradle.mod.network.UseHeraldPayload;
 import com.cradle.mod.network.OpenIconSelectionPayload;
 import com.cradle.mod.network.ChooseIconPayload;
+import com.cradle.mod.network.DuelInviteReceivedPayload;
+import com.cradle.mod.network.DuelEndPayload;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.StrikerProjectileEntity;
 import net.fabricmc.api.ModInitializer;
@@ -102,6 +104,8 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playS2C().register(OpenInfoScreenPayload.TYPE, OpenInfoScreenPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playS2C().register(OpenPathSelectionPayload.TYPE, OpenPathSelectionPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playS2C().register(OpenIconSelectionPayload.TYPE, OpenIconSelectionPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playS2C().register(DuelInviteReceivedPayload.TYPE, DuelInviteReceivedPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playS2C().register(DuelEndPayload.TYPE, DuelEndPayload.STREAM_CODEC);
 
 		// Register networking packets (client -> server)
 		PayloadTypeRegistry.playC2S().register(ChoosePathPayload.TYPE, ChoosePathPayload.STREAM_CODEC);
@@ -707,6 +711,7 @@ public class CradleMod implements ModInitializer {
 		// Save player data when the server stops, then clear in-memory cache
 		// so stale data doesn't leak into the next world in the same MC session
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+			DuelManager.clearAll();
 			autoSave(server);
 			LOGGER.info("Saved Cradle player data for {} players on shutdown.", CradlePlayerData.getAll().size());
 			// Clear in-memory data so it doesn't carry over to the next world
@@ -722,6 +727,9 @@ public class CradleMod implements ModInitializer {
 		// Revelation trial manager — checks trial progress (spirit kills, distance leash)
 		ServerTickEvents.END_SERVER_TICK.register(RevelationTrialManager::onServerTick);
 
+		// Duel manager — handles invite expiry, countdown, fight state
+		ServerTickEvents.END_SERVER_TICK.register(DuelManager::onServerTick);
+
 		// Mob kill: grant combat XP + chance to spawn Bloodforged crystal
 		ServerEntityCombatEvents.AFTER_KILLED_OTHER_ENTITY.register((level, attacker, killed, damageSource) -> {
 			if (attacker instanceof ServerPlayer player) {
@@ -731,11 +739,20 @@ public class CradleMod implements ModInitializer {
 			CrystalSpawnManager.onEntityKilled(level, attacker, killed);
 		});
 
+		// Duel system: prevent death in friendly duels (must cancel BEFORE death happens)
+		ServerLivingEntityEvents.ALLOW_DEATH.register((entity, damageSource, damageAmount) -> {
+			if (entity instanceof ServerPlayer player) {
+				return DuelManager.shouldAllowDeath(player);
+			}
+			return true; // allow death for non-players
+		});
+
 		// Player death — fail active revelation trial if the player dies
 		ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
 			RevelationTrialManager.onEntityDeath(entity);
-			// Deactivate Spirit Shift on player death
+			// Handle competitive duel deaths + deactivate Spirit Shift on player death
 			if (entity instanceof ServerPlayer deadPlayer) {
+				DuelManager.onPlayerDeath(deadPlayer, deadPlayer.level().getServer());
 				CradlePlayerData deadData = CradlePlayerData.get(deadPlayer.getUUID());
 				if (deadData != null && deadData.isSpiritShiftActive()) {
 					CyclingManager.deactivateSpiritShift(deadPlayer, deadData);
@@ -795,12 +812,14 @@ public class CradleMod implements ModInitializer {
 				if (data.isSpiritShiftActive()) CyclingManager.deactivateSpiritShift(player, data);
 			}
 			RevelationTrialManager.cancelTrial(player.getUUID());
+			DuelManager.onPlayerDisconnect(player.getUUID(), server);
 			autoSave(server);
 		});
 
 		// Register /cycle commands
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			CycleCommand.register(dispatcher);
+			DuelCommand.register(dispatcher);
 		});
 	}
 

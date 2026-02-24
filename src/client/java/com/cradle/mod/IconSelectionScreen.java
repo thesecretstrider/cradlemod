@@ -19,9 +19,9 @@ public class IconSelectionScreen extends Screen {
 
 	// ── Layout constants ──────────────────────────────────────────────
 
-	private static final int CARD_WIDTH = 150;
-	private static final int CARD_HEIGHT = 80;
-	private static final int GAP = 8;
+	private static final int CARD_WIDTH = 140;
+	private static final int CARD_HEIGHT = 70;
+	private static final int GAP = 6;
 
 	// ── State ─────────────────────────────────────────────────────────
 
@@ -75,29 +75,49 @@ public class IconSelectionScreen extends Screen {
 			return;
 		}
 
-		// Calculate layout — single row centered
-		int totalWidth = count * CARD_WIDTH + (count - 1) * GAP;
-		int startX = centerX - totalWidth / 2;
-
 		int titleHeight = 36; // title + subtitle + spacing
-		int startY = centerY - (titleHeight + CARD_HEIGHT) / 2;
 
-		// Title
-		String titleText = forMonarch
-				? "Manifest Your Icon to Ascend"
-				: "Manifest Your Icon";
-		graphics.drawCenteredString(this.font, titleText, centerX, startY, 0xFF00CCCC);
-		graphics.drawCenteredString(this.font,
-				"The Way watches. Choose the concept that defines your soul.",
-				centerX, startY + 14, 0xFFAAAAAA);
+		// ── Calculate card positions (2x2 grid for 4, single row for 3) ──
 
-		int cardRowY = startY + titleHeight;
+		if (count == 4) {
+			// 2x2 grid
+			int gridWidth = 2 * CARD_WIDTH + GAP;
+			int gridHeight = 2 * CARD_HEIGHT + GAP;
+			int totalHeight = titleHeight + gridHeight;
+			int startY = centerY - totalHeight / 2;
 
-		// ── Calculate card positions ──────────────────────────────────
+			// Title
+			drawTitle(graphics, centerX, startY);
 
-		for (int i = 0; i < count; i++) {
-			cardX[i] = startX + i * (CARD_WIDTH + GAP);
-			cardY[i] = cardRowY;
+			int gridLeft = centerX - gridWidth / 2;
+			int gridTop = startY + titleHeight;
+
+			// Top row: icons 0, 1
+			cardX[0] = gridLeft;
+			cardY[0] = gridTop;
+			cardX[1] = gridLeft + CARD_WIDTH + GAP;
+			cardY[1] = gridTop;
+
+			// Bottom row: icons 2, 3
+			cardX[2] = gridLeft;
+			cardY[2] = gridTop + CARD_HEIGHT + GAP;
+			cardX[3] = gridLeft + CARD_WIDTH + GAP;
+			cardY[3] = gridTop + CARD_HEIGHT + GAP;
+		} else {
+			// Single row for 3 (or fewer) icons
+			int totalWidth = count * CARD_WIDTH + (count - 1) * GAP;
+			int totalHeight = titleHeight + CARD_HEIGHT;
+			int startY = centerY - totalHeight / 2;
+
+			// Title
+			drawTitle(graphics, centerX, startY);
+
+			int startX = centerX - totalWidth / 2;
+			int cardRowY = startY + titleHeight;
+			for (int i = 0; i < count; i++) {
+				cardX[i] = startX + i * (CARD_WIDTH + GAP);
+				cardY[i] = cardRowY;
+			}
 		}
 
 		// ── Detect hover ──────────────────────────────────────────────
@@ -164,6 +184,16 @@ public class IconSelectionScreen extends Screen {
 			graphics.drawString(this.font, line, (int) lineX, descY, 0xFFBBBBBB);
 			descY += this.font.lineHeight + 1;
 		}
+	}
+
+	private void drawTitle(GuiGraphics graphics, int centerX, int startY) {
+		String titleText = forMonarch
+				? "Manifest Your Icon to Ascend"
+				: "Manifest Your Icon";
+		graphics.drawCenteredString(this.font, titleText, centerX, startY, 0xFF00CCCC);
+		graphics.drawCenteredString(this.font,
+				"The Way watches. Choose the concept that defines your soul.",
+				centerX, startY + 14, 0xFFAAAAAA);
 	}
 
 	/**

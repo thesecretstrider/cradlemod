@@ -233,6 +233,9 @@ public final class CradlePlayerData {
 	private boolean spiritShiftActive; // Transient — true when Herald Spirit Shift is active (B key)
 	private float currentWillpower;
 	private float maxWillpower;
+	private int duelWins;
+	private int duelLosses;
+	private int duelDraws;
 
 	private static final float DEFAULT_MAX_MADRA = 100.0f;
 	private static final float DEFAULT_MAX_WILLPOWER = 50.0f;
@@ -257,6 +260,9 @@ public final class CradlePlayerData {
 		this.underlordFlying = false;
 		this.currentWillpower = 0.0f;
 		this.maxWillpower = DEFAULT_MAX_WILLPOWER;
+		this.duelWins = 0;
+		this.duelLosses = 0;
+		this.duelDraws = 0;
 	}
 
 	// ── Getters / setters ──────────────────────────────────────────────
@@ -424,6 +430,15 @@ public final class CradlePlayerData {
 		}
 	}
 
+	public int getDuelWins() { return duelWins; }
+	public void setDuelWins(int duelWins) { this.duelWins = Math.max(0, duelWins); }
+
+	public int getDuelLosses() { return duelLosses; }
+	public void setDuelLosses(int duelLosses) { this.duelLosses = Math.max(0, duelLosses); }
+
+	public int getDuelDraws() { return duelDraws; }
+	public void setDuelDraws(int duelDraws) { this.duelDraws = Math.max(0, duelDraws); }
+
 	/**
 	 * Returns true if this player has unlocked willpower (Archlord+).
 	 * Willpower is the resource used for Sage Authority and Herald powers.
@@ -562,6 +577,9 @@ public final class CradlePlayerData {
 		tag.putString("chosenIcon", chosenIcon.name());
 		tag.putFloat("currentWillpower", currentWillpower);
 		tag.putFloat("maxWillpower", maxWillpower);
+		tag.putInt("duelWins", duelWins);
+		tag.putInt("duelLosses", duelLosses);
+		tag.putInt("duelDraws", duelDraws);
 		return tag;
 	}
 
@@ -614,6 +632,10 @@ public final class CradlePlayerData {
 		if (data.maxWillpower <= 0) {
 			data.maxWillpower = DEFAULT_MAX_WILLPOWER;
 		}
+
+		data.duelWins = tag.getIntOr("duelWins", 0);
+		data.duelLosses = tag.getIntOr("duelLosses", 0);
+		data.duelDraws = tag.getIntOr("duelDraws", 0);
 
 		return data;
 	}
