@@ -1,8 +1,17 @@
 package com.cradle.mod;
 
 import com.cradle.mod.item.CradleItems;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
+import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket;
+import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
@@ -299,6 +308,12 @@ public final class BreakthroughManager {
 			return true; // Item consumed, trial started
 		}
 
+		// Herald advancement requires a Remnant fight (boss trial)
+		if (nextStage == CradlePlayerData.AdvancementStage.HERALD) {
+			RevelationTrialManager.startHeraldTrial(player, data);
+			return true; // Trial started
+		}
+
 		// All other stages: instant breakthrough
 		performBreakthrough(player, data, nextStage);
 		return true;
@@ -385,8 +400,106 @@ public final class BreakthroughManager {
 			));
 		}
 
+		// Monarch world event — visible and audible to ALL players globally
+		if (nextStage == CradlePlayerData.AdvancementStage.MONARCH) {
+			triggerMonarchWorldEvent(player, data);
+		}
+
 		CradleMod.LOGGER.info("Player {} broke through to {} at level {}",
 				player.getName().getString(), nextStage.name(), data.getPlayerLevel());
+	}
+
+	// ── Monarch World Event ─────────────────────────────────────────
+
+	/**
+	 * Triggers a dramatic, globally-visible world event when a player becomes a Monarch.
+	 * Inspired by the End Portal opening — every player on the server sees and hears this.
+	 * Canon: When a Monarch is born, reality itself shakes. All of Cradle knows.
+	 */
+	private static void triggerMonarchWorldEvent(ServerPlayer monarch, CradlePlayerData data) {
+		var server = monarch.level().getServer();
+		if (server == null) return;
+
+		String monarchName = monarch.getName().getString();
+
+		// ── 1. Title text to ALL players ──
+		Component title = Component.literal("\u00A76\u00A7lMONARCH");
+		Component subtitle = Component.literal(
+				"\u00A7b" + monarchName + " has ascended to the pinnacle of power");
+
+		for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+			p.connection.send(new ClientboundSetTitlesAnimationPacket(20, 100, 40));
+			p.connection.send(new ClientboundSetTitleTextPacket(title));
+			p.connection.send(new ClientboundSetSubtitleTextPacket(subtitle));
+		}
+
+		// ── 2. Sound — Ender Dragon death + thunder to every player ──
+		for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+			// Play at each player's own position so everyone hears at full volume
+			p.level().playSound(null, p.getX(), p.getY(), p.getZ(),
+					SoundEvents.ENDER_DRAGON_DEATH, SoundSource.MASTER, 1.0f, 1.0f);
+			p.level().playSound(null, p.getX(), p.getY(), p.getZ(),
+					SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.MASTER, 2.0f, 0.8f);
+		}
+
+		// ── 3. Thunder — set thunderstorm for 200 ticks (10 seconds) globally ──
+		for (ServerLevel level : server.getAllLevels()) {
+			level.setWeatherParameters(0, 200, true, true);
+		}
+
+		// ── 4. Lightning ring — 8 lightning bolts in a circle (radius 15) ──
+		if (monarch.level() instanceof ServerLevel monarchLevel) {
+			for (int i = 0; i < 8; i++) {
+				double angle = (2 * Math.PI * i) / 8.0;
+				double lx = monarch.getX() + 15.0 * Math.cos(angle);
+				double lz = monarch.getZ() + 15.0 * Math.sin(angle);
+
+				LightningBolt bolt = new LightningBolt(EntityType.LIGHTNING_BOLT, monarchLevel);
+				bolt.setPos(lx, monarch.getY(), lz);
+				bolt.setVisualOnly(false); // Real lightning — dramatic!
+				monarchLevel.addFreshEntity(bolt);
+			}
+
+			// ── 5. Particle explosion — massive burst at the Monarch's location ──
+			// 200 Soul Fire Flames (expanding outward)
+			monarchLevel.sendParticles(ParticleTypes.SOUL_FIRE_FLAME,
+					monarch.getX(), monarch.getY() + 1.0, monarch.getZ(),
+					200, 3.0, 2.0, 3.0, 0.15);
+
+			// 100 End Rod particles (golden sparkle)
+			monarchLevel.sendParticles(ParticleTypes.END_ROD,
+					monarch.getX(), monarch.getY() + 1.5, monarch.getZ(),
+					100, 2.5, 3.0, 2.5, 0.1);
+
+			// 50 Witch particles (purple sparkle mist)
+			monarchLevel.sendParticles(ParticleTypes.WITCH,
+					monarch.getX(), monarch.getY() + 0.5, monarch.getZ(),
+					50, 4.0, 1.0, 4.0, 0.05);
+		}
+
+		// ── 6. Chat broadcast to ALL players ──
+		Component broadcast = Component.literal(
+				"\u00A76[Cradle] \u00A7b\u00A7l\u2726 A new Monarch has been born! " +
+				"The world trembles at the ascension of " + monarchName + "! \u2726");
+		for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+			p.sendSystemMessage(broadcast);
+		}
+
+		// ── 7. Rumble — play explosion sound to all players for screen shake feel ──
+		for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+			p.level().playSound(null, p.getX(), p.getY(), p.getZ(),
+					SoundEvents.GENERIC_EXPLODE, SoundSource.MASTER, 0.5f, 0.5f);
+		}
+
+		// ── 8. Personal lore messages to the Monarch ──
+		monarch.sendSystemMessage(Component.literal(
+				"\u00A76[Cradle] \u00A7b\u00A7l\u2726 You have ascended. Reality bows before you. \u2726"));
+		monarch.sendSystemMessage(Component.literal(
+				"\u00A76[Cradle] \u00A7b\u00A7oYou stand at the pinnacle of Cradle. Sage and Herald, united in one being."));
+		monarch.sendSystemMessage(Component.literal(
+				"\u00A76[Cradle] \u00A7bV for Authority. B for Spirit Shift. All power is yours."));
+
+		CradleMod.LOGGER.info("Monarch world event triggered for player {}", monarchName);
 	}
 
 	/**

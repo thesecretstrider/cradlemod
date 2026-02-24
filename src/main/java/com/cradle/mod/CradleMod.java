@@ -16,6 +16,7 @@ import com.cradle.mod.network.UseRulerPayload;
 import com.cradle.mod.network.ToggleCyclingPayload;
 import com.cradle.mod.network.ChooseSageHeraldPayload;
 import com.cradle.mod.network.UseSagePayload;
+import com.cradle.mod.network.UseHeraldPayload;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.StrikerProjectileEntity;
 import net.fabricmc.api.ModInitializer;
@@ -108,6 +109,7 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(ToggleCyclingPayload.TYPE, ToggleCyclingPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(ChooseSageHeraldPayload.TYPE, ChooseSageHeraldPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(UseSagePayload.TYPE, UseSagePayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(UseHeraldPayload.TYPE, UseHeraldPayload.STREAM_CODEC);
 
 		// Send initial data sync when a player joins, and open path selection if needed
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
@@ -221,12 +223,10 @@ public class CradleMod implements ModInitializer {
 							"\u00A76[Cradle] \u00A7bPress V to command Authority. Tap for Stop, hold for Kill."));
 				}
 				case "HERALD" -> {
-					data.setHasHerald(true);
-					data.setAdvancementStage(CradlePlayerData.AdvancementStage.HERALD);
-					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A7d\u2728 Your spirit merges with your body. You are now a Herald! \u2728"));
-					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A7d\u00A7oYour flesh transcends mortality. You are reborn in the image of your spirit."));
+					// Don't instantly become Herald — start the Remnant fight!
+					// The player must defeat their own Remnant (Iron Golem boss) to merge
+					// body and spirit and become a Herald.
+					RevelationTrialManager.startHeraldTrial(player, data);
 				}
 				default -> { return; }
 			}
@@ -558,6 +558,37 @@ public class CradleMod implements ModInitializer {
 			sync(player, data);
 		});
 
+		// Handle Herald Spirit Shift (B key). Requires hasHerald. Costs Willpower/tick.
+		ServerPlayNetworking.registerGlobalReceiver(UseHeraldPayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+
+			if (!data.hasHerald()) {
+				player.displayClientMessage(Component.literal(
+						"\u00A7cYou have not merged with your Remnant. Only Heralds may shift forms."), true);
+				return;
+			}
+
+			if (data.isSpiritShiftActive()) {
+				// Toggle OFF
+				CyclingManager.deactivateSpiritShift(player, data);
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7dYour spirit merges back with your body."));
+			} else {
+				// Toggle ON
+				if (data.getCurrentWillpower() <= 0) {
+					player.displayClientMessage(Component.literal(
+							"\u00A7cNot enough Willpower to shift forms!"), true);
+					return;
+				}
+				disruptCyclingIfNeeded(player, data);
+				data.setSpiritShiftActive(true);
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7d\u2728 Your spirit separates from your flesh. You walk between worlds."));
+			}
+			sync(player, data);
+		});
+
 		// Sword-stabbing cycling: right-click soft block with sword (Endless Sword / Stellar Spear)
 		UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
 			if (world.isClientSide() || !(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
@@ -633,6 +664,13 @@ public class CradleMod implements ModInitializer {
 		// Player death — fail active revelation trial if the player dies
 		ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
 			RevelationTrialManager.onEntityDeath(entity);
+			// Deactivate Spirit Shift on player death
+			if (entity instanceof ServerPlayer deadPlayer) {
+				CradlePlayerData deadData = CradlePlayerData.get(deadPlayer.getUUID());
+				if (deadData != null && deadData.isSpiritShiftActive()) {
+					CyclingManager.deactivateSpiritShift(deadPlayer, deadData);
+				}
+			}
 		});
 
 		// Cloud Hammer: wind cushions falls — Slow Falling applied when falling fast with madra
@@ -657,6 +695,7 @@ public class CradleMod implements ModInitializer {
 				data.setIronBodyActive(false);
 				if (data.isActivelyCycling()) CyclingManager.stopCycling(player, data);
 				if (data.isUnderlordFlying()) CyclingManager.disableFlight(player, data);
+				if (data.isSpiritShiftActive()) CyclingManager.deactivateSpiritShift(player, data);
 			}
 			RevelationTrialManager.cancelTrial(player.getUUID());
 			autoSave(server);

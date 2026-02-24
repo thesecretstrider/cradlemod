@@ -46,6 +46,7 @@ public record CradleSyncPayload(
 	public static final int FLAG_HAS_HERALD       = 64;
 	public static final int FLAG_SWORD_CYCLING    = 128;
 	public static final int FLAG_FLYING           = 256;
+	public static final int FLAG_SPIRIT_SHIFT     = 512;
 
 	public static final Type<CradleSyncPayload> TYPE =
 			new Type<>(Identifier.fromNamespaceAndPath("cradlemod", "cradle_sync"));
@@ -76,6 +77,7 @@ public record CradleSyncPayload(
 	public boolean hasHerald()       { return (flags & FLAG_HAS_HERALD) != 0; }
 	public boolean swordCycling()    { return (flags & FLAG_SWORD_CYCLING) != 0; }
 	public boolean flying()          { return (flags & FLAG_FLYING) != 0; }
+	public boolean spiritShiftActive() { return (flags & FLAG_SPIRIT_SHIFT) != 0; }
 
 	/**
 	 * Helper to build the flags int from individual booleans.
@@ -83,7 +85,8 @@ public record CradleSyncPayload(
 	public static int buildFlags(boolean cycling, boolean canAdvance,
 								  boolean ironBodyActive, boolean enforcerActive,
 								  boolean rulerActive, boolean hasSage, boolean hasHerald,
-								  boolean swordCycling, boolean flying) {
+								  boolean swordCycling, boolean flying,
+								  boolean spiritShiftActive) {
 		int f = 0;
 		if (cycling)         f |= FLAG_CYCLING;
 		if (canAdvance)      f |= FLAG_CAN_ADVANCE;
@@ -94,6 +97,7 @@ public record CradleSyncPayload(
 		if (hasHerald)       f |= FLAG_HAS_HERALD;
 		if (swordCycling)    f |= FLAG_SWORD_CYCLING;
 		if (flying)          f |= FLAG_FLYING;
+		if (spiritShiftActive) f |= FLAG_SPIRIT_SHIFT;
 		return f;
 	}
 

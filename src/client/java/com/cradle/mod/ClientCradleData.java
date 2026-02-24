@@ -26,6 +26,7 @@ public final class ClientCradleData {
 	public static boolean hasSage = false;
 	public static boolean hasHerald = false;
 	public static boolean flying = false;
+	public static boolean spiritShiftActive = false;
 	public static float currentWillpower = 0f;
 	public static float maxWillpower = 50f;
 
@@ -50,6 +51,7 @@ public final class ClientCradleData {
 		hasSage = false;
 		hasHerald = false;
 		flying = false;
+		spiritShiftActive = false;
 		currentWillpower = 0f;
 		maxWillpower = 50f;
 	}
@@ -71,6 +73,7 @@ public final class ClientCradleData {
 		hasSage = payload.hasSage();
 		hasHerald = payload.hasHerald();
 		flying = payload.flying();
+		spiritShiftActive = payload.spiritShiftActive();
 		currentWillpower = payload.currentWillpower();
 		maxWillpower = payload.maxWillpower();
 	}

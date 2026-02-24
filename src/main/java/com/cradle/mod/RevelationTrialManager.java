@@ -11,10 +11,14 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.animal.golem.IronGolem;
 import net.minecraft.world.entity.monster.Phantom;
 import net.minecraft.world.entity.monster.Vex;
 import net.minecraft.world.entity.monster.zombie.Zombie;
+
+import net.minecraft.world.phys.Vec3;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,14 +49,17 @@ public final class RevelationTrialManager {
 	public static class RevelationTrial {
 		public final UUID playerId;
 		public final CradlePlayerData.AdvancementStage targetStage;
+		public final boolean isHeraldTrial; // true = Herald Remnant fight (single boss)
 		public final List<UUID> spiritIds;
 		public final Set<UUID> confirmedKills; // spirits we've confirmed dead
 		public final double originX, originY, originZ;
 
 		public RevelationTrial(UUID playerId, CradlePlayerData.AdvancementStage targetStage,
+							   boolean isHeraldTrial,
 							   double originX, double originY, double originZ) {
 			this.playerId = playerId;
 			this.targetStage = targetStage;
+			this.isHeraldTrial = isHeraldTrial;
 			this.spiritIds = new ArrayList<>();
 			this.confirmedKills = new HashSet<>();
 			this.originX = originX;
@@ -86,7 +93,7 @@ public final class RevelationTrialManager {
 		}
 
 		RevelationTrial trial = new RevelationTrial(
-				playerId, targetStage,
+				playerId, targetStage, false,
 				player.getX(), player.getY(), player.getZ()
 		);
 
@@ -136,6 +143,92 @@ public final class RevelationTrialManager {
 	}
 
 	/**
+	 * Starts a Herald Remnant trial for the given player.
+	 * Instead of a swarm of spirits, spawns a single powerful Iron Golem boss
+	 * representing the player's Remnant. Canon: to become a Herald, you fight
+	 * and merge with your own Remnant (spirit made flesh).
+	 *
+	 * @param player the player attempting to become a Herald
+	 * @param data   the player's Cradle data (used for stat scaling)
+	 */
+	public static void startHeraldTrial(ServerPlayer player, CradlePlayerData data) {
+		UUID playerId = player.getUUID();
+
+		// Don't allow multiple concurrent trials
+		if (isInTrial(playerId)) {
+			player.displayClientMessage(Component.literal(
+					"\u00A7cYou are already undergoing a trial!"
+			), true);
+			return;
+		}
+
+		if (!(player.level() instanceof ServerLevel serverLevel)) return;
+
+		RevelationTrial trial = new RevelationTrial(
+				playerId, CradlePlayerData.AdvancementStage.HERALD, true,
+				player.getX(), player.getY(), player.getZ()
+		);
+
+		// Spawn the Remnant boss 5 blocks in front of the player
+		Vec3 look = player.getLookAngle();
+		double bossX = player.getX() + look.x * 5.0;
+		double bossZ = player.getZ() + look.z * 5.0;
+		double bossY = player.getY();
+
+		IronGolem remnant = new IronGolem(EntityType.IRON_GOLEM, serverLevel);
+		remnant.setPos(bossX, bossY, bossZ);
+
+		// Custom name: "§d<PlayerName>'s Remnant" — always visible
+		remnant.setCustomName(Component.literal(
+				"\u00A7d" + player.getName().getString() + "'s Remnant"));
+		remnant.setCustomNameVisible(true);
+
+		// Make it not player-created so it's hostile
+		remnant.setPlayerCreated(false);
+
+		// Boost health to 100 HP (50 hearts) — Iron Golem default is 100, but ensure it
+		AttributeInstance maxHealthAttr = remnant.getAttribute(Attributes.MAX_HEALTH);
+		if (maxHealthAttr != null) {
+			maxHealthAttr.setBaseValue(100.0);
+		}
+		remnant.setHealth(100.0f);
+
+		// Boost attack damage (+5 above base)
+		AttributeInstance attackAttr = remnant.getAttribute(Attributes.ATTACK_DAMAGE);
+		if (attackAttr != null) {
+			attackAttr.setBaseValue(attackAttr.getBaseValue() + 5.0);
+		}
+
+		// Boost speed slightly for a more challenging fight
+		AttributeInstance speedAttr = remnant.getAttribute(Attributes.MOVEMENT_SPEED);
+		if (speedAttr != null) {
+			speedAttr.setBaseValue(speedAttr.getBaseValue() * 1.3);
+		}
+
+		// Effects: Glowing (always visible), Fire Resistance, Speed I
+		remnant.addEffect(new MobEffectInstance(MobEffects.GLOWING, 999999, 0, false, false));
+		remnant.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 999999, 0, false, false));
+		remnant.addEffect(new MobEffectInstance(MobEffects.SPEED, 999999, 0, false, false));
+
+		// Target the player
+		remnant.setTarget(player);
+
+		serverLevel.addFreshEntity(remnant);
+		trial.spiritIds.add(remnant.getUUID());
+
+		ACTIVE_TRIALS.put(playerId, trial);
+
+		// Lore messages
+		player.sendSystemMessage(Component.literal(
+				"\u00A76[Cradle] \u00A7d\u2694 Your Remnant materializes before you. Your spirit made flesh \u2014 it mirrors your every strength."));
+		player.sendSystemMessage(Component.literal(
+				"\u00A76[Cradle] \u00A7d\u00A7oDefeat it to merge body and spirit. Fail, and you will be consumed."));
+
+		CradleMod.LOGGER.info("Player {} started Herald Remnant trial (Iron Golem boss, 100 HP)",
+				player.getName().getString());
+	}
+
+	/**
 	 * Called every server tick to check trial status.
 	 */
 	public static void onServerTick(MinecraftServer server) {
@@ -161,7 +254,13 @@ public final class RevelationTrialManager {
 					Math.pow(player.getZ() - trial.originZ, 2)
 			);
 			if (dist > MAX_DISTANCE) {
-				failTrial(player, trial, "You fled from your own revelation... The truth cannot be outrun.");
+				if (trial.isHeraldTrial) {
+					failTrial(player, trial,
+							"You fled from yourself. Your Remnant fades, unmerged.");
+				} else {
+					failTrial(player, trial,
+							"You fled from your own revelation... The truth cannot be outrun.");
+				}
 				continue;
 			}
 
@@ -191,7 +290,13 @@ public final class RevelationTrialManager {
 		if (entity instanceof ServerPlayer player) {
 			RevelationTrial trial = ACTIVE_TRIALS.get(player.getUUID());
 			if (trial != null) {
-				failTrial(player, trial, "Your revelation was incomplete... The spirits consume your doubt. You must try again.");
+				if (trial.isHeraldTrial) {
+					failTrial(player, trial,
+							"Your Remnant overwhelmed you. Your spirit remains divided...");
+				} else {
+					failTrial(player, trial,
+							"Your revelation was incomplete... The spirits consume your doubt. You must try again.");
+				}
 			}
 		}
 	}
@@ -275,27 +380,54 @@ public final class RevelationTrialManager {
 	private static void completeTrial(ServerPlayer player, RevelationTrial trial) {
 		ACTIVE_TRIALS.remove(trial.playerId);
 
-		player.sendSystemMessage(Component.literal(
-				"\u00A76[Cradle] \u00A7d\u00A7oThe spirits fade. Your revelation is complete."
-		));
-
 		CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
 
-		// Perform the actual breakthrough
-		BreakthroughManager.performBreakthrough(player, data, trial.targetStage);
+		if (trial.isHeraldTrial) {
+			// ── Herald Remnant trial completion ──
+			// Set Herald flag and stage
+			data.setHasHerald(true);
+			data.setAdvancementStage(CradlePlayerData.AdvancementStage.HERALD);
+
+			// Boost maxMadra
+			float boost = BreakthroughManager.getMaxMadraBoost(CradlePlayerData.AdvancementStage.HERALD);
+			data.setMaxMadra(data.getMaxMadra() + boost);
+			data.setCurrentMadra(data.getMaxMadra() * 0.25f);
+
+			// Grant willpower (same as Sage grants willpower)
+			data.setCurrentWillpower(data.getMaxWillpower());
+
+			// Herald lore messages
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A7d\u2726 Your Remnant dissolves into you. Body and spirit become one. You are reborn as a Herald. \u2726"));
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A7d\u00A7oYour flesh transcends mortality. You walk between the physical and spiritual."));
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A7dPress B to shift between forms. Your Herald body grants you unmatched strength."));
+
+			CradleMod.LOGGER.info("Player {} completed Herald Remnant trial — now a Herald!",
+					player.getName().getString());
+		} else {
+			// ── Standard revelation trial completion ──
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A7d\u00A7oThe spirits fade. Your revelation is complete."
+			));
+
+			// Perform the actual breakthrough
+			BreakthroughManager.performBreakthrough(player, data, trial.targetStage);
+
+			CradleMod.LOGGER.info("Player {} completed {} revelation trial",
+					player.getName().getString(), trial.targetStage.name());
+		}
 
 		// Save and sync
 		CradleMod.autoSave(player.level().getServer());
 		ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
-
-		CradleMod.LOGGER.info("Player {} completed {} revelation trial",
-				player.getName().getString(), trial.targetStage.name());
 	}
 
 	private static void failTrial(ServerPlayer player, RevelationTrial trial, String message) {
 		ACTIVE_TRIALS.remove(trial.playerId);
 
-		// Despawn remaining spirits
+		// Despawn remaining spirits/boss
 		if (player.level() instanceof ServerLevel serverLevel) {
 			for (UUID spiritId : trial.spiritIds) {
 				var entity = serverLevel.getEntity(spiritId);
@@ -309,8 +441,9 @@ public final class RevelationTrialManager {
 				"\u00A76[Cradle] \u00A7c" + message
 		));
 
-		CradleMod.LOGGER.info("Player {} failed {} revelation trial",
-				player.getName().getString(), trial.targetStage.name());
+		CradleMod.LOGGER.info("Player {} failed {} trial",
+				player.getName().getString(),
+				trial.isHeraldTrial ? "Herald Remnant" : trial.targetStage.name());
 	}
 
 	/**

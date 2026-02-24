@@ -147,6 +147,7 @@ public final class CradlePlayerData {
 	private boolean hasHerald;
 	private boolean swordCycling; // True when cycling with sword stabbed into soft block (Endless Sword / Stellar Spear)
 	private boolean underlordFlying; // Transient — true when flight is enabled (Underlord+ / Cloud Hammer Copper+)
+	private boolean spiritShiftActive; // Transient — true when Herald Spirit Shift is active (B key)
 	private float currentWillpower;
 	private float maxWillpower;
 
@@ -302,6 +303,14 @@ public final class CradlePlayerData {
 
 	public void setUnderlordFlying(boolean underlordFlying) {
 		this.underlordFlying = underlordFlying;
+	}
+
+	public boolean isSpiritShiftActive() {
+		return spiritShiftActive;
+	}
+
+	public void setSpiritShiftActive(boolean spiritShiftActive) {
+		this.spiritShiftActive = spiritShiftActive;
 	}
 
 	public float getCurrentWillpower() {

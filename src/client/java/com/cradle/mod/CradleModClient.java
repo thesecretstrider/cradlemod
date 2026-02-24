@@ -9,6 +9,7 @@ import com.cradle.mod.network.UseStrikerPayload;
 import com.cradle.mod.network.UseRulerPayload;
 import com.cradle.mod.network.ToggleCyclingPayload;
 import com.cradle.mod.network.UseSagePayload;
+import com.cradle.mod.network.UseHeraldPayload;
 import com.cradle.mod.block.CradleBlocks;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.StrikerProjectileRenderer;
@@ -99,6 +100,16 @@ public class CradleModClient implements ClientModInitializer {
 					"key.cradlemod.sage",
 					InputConstants.Type.KEYSYM,
 					GLFW.GLFW_KEY_V,
+					CRADLE_CATEGORY
+			)
+	);
+
+	// Keybind: press B to toggle Herald Spirit Shift
+	private static final KeyMapping HERALD_KEYBIND = KeyBindingHelper.registerKeyBinding(
+			new KeyMapping(
+					"key.cradlemod.herald",
+					InputConstants.Type.KEYSYM,
+					GLFW.GLFW_KEY_B,
 					CRADLE_CATEGORY
 			)
 	);
@@ -227,6 +238,11 @@ public class CradleModClient implements ClientModInitializer {
 			sageKeyWasDown = sageDown;
 			// Consume any queued clicks so they don't interfere
 			while (SAGE_KEYBIND.consumeClick()) { /* consumed */ }
+
+			// Herald Spirit Shift: press B to toggle
+			while (HERALD_KEYBIND.consumeClick()) {
+				ClientPlayNetworking.send(new UseHeraldPayload());
+			}
 
 			CyclingParticleRenderer.tick(client);
 		});

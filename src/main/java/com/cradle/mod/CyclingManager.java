@@ -112,6 +112,11 @@ public final class CyclingManager {
 	private static final Identifier ENFORCER_ARMOR_ID = Identifier.fromNamespaceAndPath("cradlemod", "enforcer_armor");
 	private static final Identifier ENFORCER_KNOCKBACK_RESISTANCE_ID = Identifier.fromNamespaceAndPath("cradlemod", "enforcer_knockback_resistance");
 
+	// Attribute modifier IDs for Herald passive bonuses (always on for Herald/Monarch)
+	private static final Identifier HERALD_ATTACK_DAMAGE_ID = Identifier.fromNamespaceAndPath("cradlemod", "herald_attack_damage");
+	private static final Identifier HERALD_SPEED_ID = Identifier.fromNamespaceAndPath("cradlemod", "herald_speed");
+	private static final Identifier HERALD_ARMOR_ID = Identifier.fromNamespaceAndPath("cradlemod", "herald_armor");
+
 	// Tracks strain tick counter for Burning Body (Black Flame)
 	private static final Map<UUID, Integer> BURNING_BODY_STRAIN_TICKS = new HashMap<>();
 
@@ -124,6 +129,9 @@ public final class CyclingManager {
 	private static final int RULER_EFFECT_INTERVAL = 10; // every 0.5 seconds
 	// Tracks Ruler effect tick counter
 	private static final Map<UUID, Integer> RULER_EFFECT_TICKS = new HashMap<>();
+
+	// Tracks Spirit Shift particle tick counter
+	private static final Map<UUID, Integer> SPIRIT_SHIFT_PARTICLE_TICKS = new HashMap<>();
 
 	// ── Tick handler ───────────────────────────────────────────────────
 
@@ -207,6 +215,49 @@ public final class CyclingManager {
 				if (player.fallDistance >= 3.0f && !player.hasEffect(MobEffects.SLOW_FALLING)) {
 					player.addEffect(new MobEffectInstance(
 							MobEffects.SLOW_FALLING, CUSHIONED_LANDING_DURATION, 0, false, true));
+				}
+			}
+
+			// ── Herald passive bonuses (always on for Herald/Monarch) ────
+			if (data.hasHerald()) {
+				ensureModifier(player, Attributes.ATTACK_DAMAGE, HERALD_ATTACK_DAMAGE_ID,
+						3.0, AttributeModifier.Operation.ADD_VALUE);
+				ensureModifier(player, Attributes.MOVEMENT_SPEED, HERALD_SPEED_ID,
+						0.02, AttributeModifier.Operation.ADD_VALUE);
+				ensureModifier(player, Attributes.ARMOR, HERALD_ARMOR_ID,
+						5.0, AttributeModifier.Operation.ADD_VALUE);
+			} else {
+				// Remove Herald modifiers if player lost Herald status (e.g. /cycle setstage)
+				removeHeraldModifiers(player);
+			}
+
+			// ── Herald Spirit Shift tick (B key toggle) ──────────────────
+			if (data.isSpiritShiftActive()) {
+				float drain = 0.5f * data.getMadraCostMultiplier();
+				data.setCurrentWillpower(data.getCurrentWillpower() - drain);
+
+				if (data.getCurrentWillpower() <= 0) {
+					data.setCurrentWillpower(0);
+					deactivateSpiritShift(player, data);
+					player.displayClientMessage(Component.literal(
+							"\u00A7cSpirit Shift ended \u2014 out of Willpower!"), true);
+				} else {
+					// Apply spirit form effects each tick
+					refreshEffect(player, MobEffects.INVISIBILITY, 40, 0);
+					refreshEffect(player, MobEffects.SPEED, 40, 1);
+					refreshEffect(player, MobEffects.FIRE_RESISTANCE, 40, 0);
+					player.noPhysics = true;
+
+					// Ethereal particles every 3 ticks
+					int pTick = SPIRIT_SHIFT_PARTICLE_TICKS.getOrDefault(playerId, 0) + 1;
+					SPIRIT_SHIFT_PARTICLE_TICKS.put(playerId, pTick);
+					if (pTick >= 3) {
+						SPIRIT_SHIFT_PARTICLE_TICKS.put(playerId, 0);
+						((ServerLevel) player.level()).sendParticles(
+								net.minecraft.core.particles.ParticleTypes.SOUL_FIRE_FLAME,
+								player.getX(), player.getY() + 1.0, player.getZ(),
+								2, 0.3, 0.5, 0.3, 0.01);
+					}
 				}
 			}
 
@@ -524,6 +575,25 @@ public final class CyclingManager {
 		}
 	}
 
+	/** Deactivates Herald Spirit Shift, cleaning up all effects and physics. */
+	public static void deactivateSpiritShift(ServerPlayer player, CradlePlayerData data) {
+		data.setSpiritShiftActive(false);
+		SPIRIT_SHIFT_PARTICLE_TICKS.remove(player.getUUID());
+		player.removeEffect(MobEffects.INVISIBILITY);
+		player.removeEffect(MobEffects.SPEED);
+		player.removeEffect(MobEffects.FIRE_RESISTANCE);
+		if (!player.isCreative() && !player.isSpectator()) {
+			player.noPhysics = false;
+		}
+	}
+
+	/** Removes all Herald passive attribute modifiers from the player. */
+	public static void removeHeraldModifiers(ServerPlayer player) {
+		removeModifierSafe(player, Attributes.ATTACK_DAMAGE, HERALD_ATTACK_DAMAGE_ID);
+		removeModifierSafe(player, Attributes.MOVEMENT_SPEED, HERALD_SPEED_ID);
+		removeModifierSafe(player, Attributes.ARMOR, HERALD_ARMOR_ID);
+	}
+
 	private static void removeModifierSafe(ServerPlayer player, Holder<Attribute> attribute, Identifier id) {
 		var instance = player.getAttribute(attribute);
 		if (instance != null && instance.getModifier(id) != null) instance.removeModifier(id);
@@ -802,7 +872,8 @@ public final class CyclingManager {
 						data.hasSage(),
 						data.hasHerald(),
 						data.isSwordCycling(),
-						data.isUnderlordFlying()
+						data.isUnderlordFlying(),
+						data.isSpiritShiftActive()
 				),
 				data.getIronBody().name(),
 				data.getCurrentWillpower(),
