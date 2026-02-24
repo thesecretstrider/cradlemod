@@ -106,6 +106,30 @@ public final class CycleCommand {
 										CradlePlayerData.AdvancementStage stage =
 												CradlePlayerData.AdvancementStage.valueOf(stageName.toUpperCase());
 										data.setAdvancementStage(stage);
+
+										// Set Sage/Herald flags to match the stage so branching logic works correctly
+										switch (stage) {
+											case SAGE -> {
+												data.setHasSage(true);
+												if (data.getCurrentWillpower() <= 0)
+													data.setCurrentWillpower(data.getMaxWillpower());
+											}
+											case HERALD -> data.setHasHerald(true);
+											case MONARCH -> {
+												data.setHasSage(true);
+												data.setHasHerald(true);
+												if (data.getCurrentWillpower() <= 0)
+													data.setCurrentWillpower(data.getMaxWillpower());
+											}
+											default -> {
+												// Resetting to a stage below Sage/Herald clears the flags
+												if (stage.ordinal() < CradlePlayerData.AdvancementStage.SAGE.ordinal()) {
+													data.setHasSage(false);
+													data.setHasHerald(false);
+												}
+											}
+										}
+
 										ctx.getSource().sendSuccess(
 												() -> Component.literal("§6[Cradle] §fStage set to §e" + stage.displayName()),
 												true
