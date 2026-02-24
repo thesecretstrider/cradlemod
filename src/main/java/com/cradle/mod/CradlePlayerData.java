@@ -342,14 +342,14 @@ public final class CradlePlayerData {
 
 	/**
 	 * Returns true if this player's stage is high enough for flight.
-	 * Cloud Hammer (wind/storm path) unlocks flight at Copper.
-	 * All other paths unlock flight at Underlord.
+	 * Cloud Hammer (wind/storm path) unlocks flight at Low Gold.
+	 * All other paths unlock flight at Archlord.
 	 */
 	public boolean canFly() {
 		if (chosenPath == Path.CLOUD_HAMMER) {
-			return advancementStage.ordinal() >= AdvancementStage.COPPER.ordinal();
+			return advancementStage.ordinal() >= AdvancementStage.LOW_GOLD.ordinal();
 		}
-		return advancementStage.ordinal() >= AdvancementStage.UNDERLORD.ordinal();
+		return advancementStage.ordinal() >= AdvancementStage.ARCHLORD.ordinal();
 	}
 
 	/**

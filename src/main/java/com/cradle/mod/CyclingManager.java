@@ -138,6 +138,11 @@ public final class CyclingManager {
 				data.setCurrentMadra(data.getCurrentMadra() + passiveRate);
 			}
 
+			// Passive Willpower regen (Archlord+): 0.05/tick = 1.0 per second
+			if (data.hasWillpower() && data.getCurrentWillpower() < data.getMaxWillpower()) {
+				data.setCurrentWillpower(data.getCurrentWillpower() + 0.05f);
+			}
+
 			// Iron Body passive buff (Steelborn/Raindrop toggle)
 			if (data.isIronBodyActive()) {
 				switch (data.getIronBody()) {

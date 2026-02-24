@@ -8,6 +8,7 @@ import com.cradle.mod.network.UseEnforcerPayload;
 import com.cradle.mod.network.UseStrikerPayload;
 import com.cradle.mod.network.UseRulerPayload;
 import com.cradle.mod.network.ToggleCyclingPayload;
+import com.cradle.mod.network.UseSagePayload;
 import com.cradle.mod.block.CradleBlocks;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.StrikerProjectileRenderer;
@@ -15,6 +16,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.rendering.v1.BlockRenderLayerMap;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -91,6 +93,20 @@ public class CradleModClient implements ClientModInitializer {
 			)
 	);
 
+	// Keybind: press V for Sage Authority (tap = Stop, hold 1s = Kill)
+	private static final KeyMapping SAGE_KEYBIND = KeyBindingHelper.registerKeyBinding(
+			new KeyMapping(
+					"key.cradlemod.sage",
+					InputConstants.Type.KEYSYM,
+					GLFW.GLFW_KEY_V,
+					CRADLE_CATEGORY
+			)
+	);
+
+	// Sage keybind hold detection state
+	private static int sageKeyHeldTicks = 0;
+	private static boolean sageKeyWasDown = false;
+
 	@Override
 	public void onInitializeClient() {
 		// ── Register block render layers (cutout for transparency) ──
@@ -139,6 +155,38 @@ public class CradleModClient implements ClientModInitializer {
 				}
 		);
 
+		// ── Willpower bar (left side of screen, vertical, blue) ─────
+		HudRenderCallback.EVENT.register((graphics, deltaTracker) -> {
+			if (!ClientCradleData.hasWillpower()) return;
+
+			Minecraft mc = Minecraft.getInstance();
+			int screenHeight = mc.getWindow().getGuiScaledHeight();
+
+			// Bar dimensions and position
+			int barWidth = 6;
+			int barHeight = 60;
+			int barX = 4;                                    // 4px from left edge
+			int barY = (screenHeight / 2) - (barHeight / 2); // vertically centered
+
+			// Dark background
+			graphics.fill(barX, barY, barX + barWidth, barY + barHeight, 0xFF222222);
+
+			// Blue fill from bottom, based on willpower ratio
+			float ratio = ClientCradleData.maxWillpower > 0
+					? ClientCradleData.currentWillpower / ClientCradleData.maxWillpower : 0f;
+			int fillHeight = (int) (barHeight * Math.min(1f, ratio));
+			if (fillHeight > 0) {
+				graphics.fill(barX, barY + barHeight - fillHeight,
+						barX + barWidth, barY + barHeight, 0xFF4488FF);
+			}
+
+			// 1px highlight border on left edge
+			graphics.fill(barX, barY, barX + 1, barY + barHeight, 0x44FFFFFF);
+
+			// "WP" label above the bar
+			graphics.drawString(mc.font, "WP", barX - 1, barY - 10, 0xFF6699FF, false);
+		});
+
 		// ── Keybind + Cycling Particles ──────────────────────────────
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (INFO_KEYBIND.consumeClick()) {
@@ -159,6 +207,27 @@ public class CradleModClient implements ClientModInitializer {
 			while (CYCLING_KEYBIND.consumeClick()) {
 				ClientPlayNetworking.send(new ToggleCyclingPayload());
 			}
+
+			// Sage Authority: tap V = Stop, hold V for 20 ticks (1 second) = Kill
+			boolean sageDown = SAGE_KEYBIND.isDown();
+			if (sageDown) {
+				sageKeyHeldTicks++;
+				if (sageKeyHeldTicks == 20) {
+					// Held for 1 second → KILL
+					ClientPlayNetworking.send(new UseSagePayload("KILL"));
+				}
+			} else if (sageKeyWasDown) {
+				// Key was released
+				if (sageKeyHeldTicks > 0 && sageKeyHeldTicks < 20) {
+					// Short tap → STOP
+					ClientPlayNetworking.send(new UseSagePayload("STOP"));
+				}
+				sageKeyHeldTicks = 0;
+			}
+			sageKeyWasDown = sageDown;
+			// Consume any queued clicks so they don't interfere
+			while (SAGE_KEYBIND.consumeClick()) { /* consumed */ }
+
 			CyclingParticleRenderer.tick(client);
 		});
 	}

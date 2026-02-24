@@ -15,6 +15,7 @@ import com.cradle.mod.network.UseStrikerPayload;
 import com.cradle.mod.network.UseRulerPayload;
 import com.cradle.mod.network.ToggleCyclingPayload;
 import com.cradle.mod.network.ChooseSageHeraldPayload;
+import com.cradle.mod.network.UseSagePayload;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.StrikerProjectileEntity;
 import net.fabricmc.api.ModInitializer;
@@ -39,7 +40,14 @@ import net.minecraft.tags.ItemTags;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.core.particles.ParticleTypes;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,10 +67,15 @@ public class CradleMod implements ModInitializer {
 	private static final long BLOODFORGED_COOLDOWN_MS = 30_000;
 	private static final long STRIKER_COOLDOWN_MS = 2_000;
 	private static final float STRIKER_MADRA_COST = 15.0f;
+	private static final long SAGE_STOP_COOLDOWN_MS = 12_000;   // 12 seconds base
+	private static final long SAGE_KILL_COOLDOWN_MS = 20_000;   // 20 seconds base
+	private static final float SAGE_STOP_WILLPOWER_COST = 25.0f;
+	private static final float SAGE_KILL_WILLPOWER_COST = 40.0f;
 	private static final int AUTO_SAVE_INTERVAL_TICKS = 600; // 30 seconds
 
 	private static final Map<UUID, Long> bloodforgedCooldowns = new HashMap<>();
 	private static final Map<UUID, Long> strikerCooldowns = new HashMap<>();
+	private static final Map<String, Long> sageAbilityCooldowns = new HashMap<>();
 	private static int ticksSinceLastSave = 0;
 
 	@Override
@@ -94,6 +107,7 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(UseRulerPayload.TYPE, UseRulerPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(ToggleCyclingPayload.TYPE, ToggleCyclingPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(ChooseSageHeraldPayload.TYPE, ChooseSageHeraldPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(UseSagePayload.TYPE, UseSagePayload.STREAM_CODEC);
 
 		// Send initial data sync when a player joins, and open path selection if needed
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
@@ -198,10 +212,13 @@ public class CradleMod implements ModInitializer {
 				case "SAGE" -> {
 					data.setHasSage(true);
 					data.setAdvancementStage(CradlePlayerData.AdvancementStage.SAGE);
+					data.setCurrentWillpower(data.getMaxWillpower());
 					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A7b\u2728 You have touched the Way and become a Sage! \u2728"));
+							"\u00A76[Cradle] \u00A7b\u2728 You have touched an Icon. Reality itself acknowledges your will. \u2728"));
 					player.sendSystemMessage(Component.literal(
-							"\u00A76[Cradle] \u00A7b\u00A7oThe Icon appears above you. Reality itself acknowledges your authority."));
+							"\u00A76[Cradle] \u00A7b\u00A7oYou are reborn as a Sage. Authority flows through you."));
+					player.sendSystemMessage(Component.literal(
+							"\u00A76[Cradle] \u00A7bPress V to command Authority. Tap for Stop, hold for Kill."));
 				}
 				case "HERALD" -> {
 					data.setHasHerald(true);
@@ -375,6 +392,172 @@ public class CradleMod implements ModInitializer {
 			sync(player, data);
 		});
 
+		// Handle Sage Authority (V key). Requires hasSage. Costs Willpower + has cooldown.
+		ServerPlayNetworking.registerGlobalReceiver(UseSagePayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+
+			// Must be a Sage (or Monarch)
+			if (!data.hasSage()) {
+				player.displayClientMessage(Component.literal(
+						"\u00A7cYou have not touched an Icon. Only Sages may wield Authority."), true);
+				return;
+			}
+
+			String ability = payload.ability();
+			float willpowerCost;
+			long baseCooldown;
+
+			switch (ability) {
+				case "STOP" -> {
+					willpowerCost = SAGE_STOP_WILLPOWER_COST;
+					baseCooldown = SAGE_STOP_COOLDOWN_MS;
+				}
+				case "KILL" -> {
+					willpowerCost = SAGE_KILL_WILLPOWER_COST;
+					baseCooldown = SAGE_KILL_COOLDOWN_MS;
+				}
+				default -> { return; }
+			}
+
+			// Monarch gets 30% willpower discount
+			if (data.hasSage() && data.hasHerald()) {
+				willpowerCost *= 0.7f;
+			}
+
+			// Cooldown check (keyed per ability type per player)
+			long now = System.currentTimeMillis();
+			String cooldownKey = player.getUUID() + ":" + ability;
+			Long lastUse = sageAbilityCooldowns.get(cooldownKey);
+			long effectiveCooldown = (long) (baseCooldown * data.getCooldownMultiplier());
+			if (lastUse != null && now - lastUse < effectiveCooldown) {
+				long remainingMs = effectiveCooldown - (now - lastUse);
+				double remainingSec = Math.ceil(remainingMs / 100.0) / 10.0;
+				player.displayClientMessage(Component.literal(
+						"\u00A7cAuthority on cooldown! \u00A7e" + String.format("%.1f", remainingSec) + "s"), true);
+				return;
+			}
+
+			// Willpower check
+			if (data.getCurrentWillpower() < willpowerCost) {
+				player.displayClientMessage(Component.literal(
+						"\u00A7cNot enough Willpower! Need \u00A7b" + String.format("%.0f", willpowerCost)), true);
+				return;
+			}
+
+			disruptCyclingIfNeeded(player, data);
+
+			// Deduct willpower, set cooldown
+			data.setCurrentWillpower(data.getCurrentWillpower() - willpowerCost);
+			sageAbilityCooldowns.put(cooldownKey, now);
+
+			ServerLevel serverLevel = (ServerLevel) player.level();
+
+			if ("STOP".equals(ability)) {
+				// ── Authority: STOP ──
+				// Freeze all hostile entities within 10 blocks for 3-5 seconds
+				float duration = 3.0f + (data.getAbilityPowerMultiplier() - 1.0f) * 2.0f;
+				int durationTicks = (int) (duration * 20);
+				AABB area = player.getBoundingBox().inflate(10.0);
+				java.util.List<LivingEntity> hostiles = serverLevel.getEntitiesOfClass(
+						LivingEntity.class, area,
+						e -> e != player && e.isAlive() && isHostile(e, player));
+
+				int frozenCount = 0;
+				for (LivingEntity e : hostiles) {
+					// Sage vs Sage counter: if target is a Sage player, they can resist
+					if (e instanceof ServerPlayer targetPlayer) {
+						CradlePlayerData targetData = CradlePlayerData.getOrCreate(targetPlayer.getUUID());
+						if (targetData.hasSage() && targetData.getCurrentWillpower() >= 15.0f) {
+							targetData.setCurrentWillpower(targetData.getCurrentWillpower() - 15.0f);
+							targetPlayer.sendSystemMessage(Component.literal(
+									"\u00A76[Cradle] \u00A7bYou resist " + player.getName().getString() + "'s Authority!"));
+							player.sendSystemMessage(Component.literal(
+									"\u00A76[Cradle] \u00A7c" + targetPlayer.getName().getString() + " countered your Stop!"));
+							sync(targetPlayer, targetData);
+							continue;
+						}
+					}
+					// Apply freeze: Slowness 127 (practically frozen) + Mining Fatigue
+					e.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+							net.minecraft.world.effect.MobEffects.SLOWNESS, durationTicks, 127, false, false));
+					e.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+							net.minecraft.world.effect.MobEffects.MINING_FATIGUE, durationTicks, 5, false, false));
+					frozenCount++;
+				}
+
+				// Particles: ring of blue soul flames around player
+				for (int i = 0; i < 36; i++) {
+					double angle = Math.toRadians(i * 10);
+					double px = player.getX() + Math.cos(angle) * 10.0;
+					double pz = player.getZ() + Math.sin(angle) * 10.0;
+					serverLevel.sendParticles(ParticleTypes.SOUL_FIRE_FLAME,
+							px, player.getY() + 0.5, pz, 2, 0.1, 0.3, 0.1, 0.01);
+				}
+
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7b\u2728 \"" + getSageWord(data) + "\" \u2014 "
+								+ frozenCount + " entities frozen by your Authority."));
+
+			} else {
+				// ── Authority: KILL ──
+				// Targeted: entity the player is looking at within 20 blocks
+				Vec3 eyePos = player.getEyePosition();
+				Vec3 lookVec = player.getLookAngle();
+				Vec3 endPos = eyePos.add(lookVec.scale(20.0));
+				AABB searchBox = player.getBoundingBox().inflate(20.0);
+
+				EntityHitResult hitResult = ProjectileUtil.getEntityHitResult(
+						player, eyePos, endPos, searchBox,
+						e -> e instanceof LivingEntity && e.isAlive() && e != player, 20.0 * 20.0);
+
+				if (hitResult == null || !(hitResult.getEntity() instanceof LivingEntity target)) {
+					player.displayClientMessage(Component.literal("\u00A7cNo target in sight."), true);
+					// Refund willpower since ability didn't fire
+					data.setCurrentWillpower(data.getCurrentWillpower() + willpowerCost);
+					sageAbilityCooldowns.remove(cooldownKey);
+					sync(player, data);
+					return;
+				}
+
+				// Sage vs Sage counter
+				if (target instanceof ServerPlayer targetPlayer) {
+					CradlePlayerData targetData = CradlePlayerData.getOrCreate(targetPlayer.getUUID());
+					if (targetData.hasSage() && targetData.getCurrentWillpower() >= 25.0f) {
+						targetData.setCurrentWillpower(targetData.getCurrentWillpower() - 25.0f);
+						targetPlayer.sendSystemMessage(Component.literal(
+								"\u00A76[Cradle] \u00A7bYou deflect " + player.getName().getString() + "'s killing intent!"));
+						player.sendSystemMessage(Component.literal(
+								"\u00A76[Cradle] \u00A7c" + targetPlayer.getName().getString() + " blocked your Authority!"));
+						sync(targetPlayer, targetData);
+						sync(player, data);
+						return;
+					}
+				}
+
+				// Deal massive true damage (bypasses armor via MAGIC damage source)
+				float damage = 20.0f * data.getAbilityPowerMultiplier();
+				target.hurtServer(serverLevel, player.damageSources().magic(), damage);
+
+				// Particles: line of soul flames from player to target
+				Vec3 dir = target.position().subtract(player.position()).normalize();
+				double dist = player.distanceTo(target);
+				for (double d = 0; d < dist; d += 0.5) {
+					serverLevel.sendParticles(ParticleTypes.SOUL_FIRE_FLAME,
+							player.getX() + dir.x * d,
+							player.getEyeY() - 0.3 + dir.y * d,
+							player.getZ() + dir.z * d,
+							1, 0.05, 0.05, 0.05, 0.0);
+				}
+
+				player.sendSystemMessage(Component.literal(
+						"\u00A76[Cradle] \u00A7b\u2620 Your Authority strikes " + target.getName().getString()
+								+ " for \u00A7c" + String.format("%.0f", damage) + " \u00A7bdamage."));
+			}
+
+			sync(player, data);
+		});
+
 		// Sword-stabbing cycling: right-click soft block with sword (Endless Sword / Stellar Spear)
 		UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
 			if (world.isClientSide() || !(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
@@ -506,6 +689,27 @@ public class CradleMod implements ModInitializer {
 			case CLOUD_HAMMER -> "Gravity Field";
 			case HOLLOW_KING -> "Hollow Domain";
 			default -> "Ruler Technique";
+		};
+	}
+
+	/** Returns true if the entity is hostile toward the given player. */
+	private static boolean isHostile(LivingEntity entity, Player player) {
+		if (entity instanceof net.minecraft.world.entity.monster.Monster) return true;
+		if (entity instanceof Mob mob && mob.getTarget() == player) return true;
+		// Hostile wolves (from dreadbeast mixin) target players
+		if (entity instanceof net.minecraft.world.entity.animal.wolf.Wolf wolf && !wolf.isTame()) return true;
+		return false;
+	}
+
+	/** Returns the Sage's Authority word based on their path — flavor only. */
+	private static String getSageWord(CradlePlayerData data) {
+		return switch (data.getChosenPath()) {
+			case HOLLOW_KING -> "Stop";
+			case BLACK_FLAME -> "Burn";
+			case ENDLESS_SWORD -> "Cut";
+			case STELLAR_SPEAR -> "Pierce";
+			case CLOUD_HAMMER -> "Fall";
+			default -> "Stop";
 		};
 	}
 
