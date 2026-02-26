@@ -1,5 +1,9 @@
 package com.cradle.mod;
 
+import com.cradle.mod.ability.AbilityDefinition;
+import com.cradle.mod.ability.AbilityRegistry;
+import com.cradle.mod.ability.PlayerLoadout;
+import com.cradle.mod.network.AbilityLoadoutSyncPayload;
 import com.cradle.mod.network.OpenInfoScreenPayload;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -239,6 +243,115 @@ public final class CycleCommand {
 									);
 									return 1;
 								})))
+
+				// /cycle setskillpoints <amount> — set upgrade points
+				.then(Commands.literal("setskillpoints")
+						.requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+						.then(Commands.argument("amount", IntegerArgumentType.integer(0))
+								.executes(ctx -> {
+									ServerPlayer player = ctx.getSource().getPlayerOrException();
+									CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+									int amount = IntegerArgumentType.getInteger(ctx, "amount");
+									data.getLoadout().setUpgradePoints(amount);
+									syncLoadout(player, data);
+									ctx.getSource().sendSuccess(
+											() -> Component.literal("§6[Cradle] §fUpgrade points set to §e" + amount),
+											true
+									);
+									return 1;
+								})))
+
+				// /cycle setability <slot> <abilityId> [level] — force equip an ability
+				.then(Commands.literal("setability")
+						.requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+						.then(Commands.argument("slot", IntegerArgumentType.integer(0, 5))
+								.then(Commands.argument("abilityId", StringArgumentType.word())
+										// Without level — defaults to 1
+										.executes(ctx -> {
+											ServerPlayer player = ctx.getSource().getPlayerOrException();
+											CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+											int slot = IntegerArgumentType.getInteger(ctx, "slot");
+											String abilityId = StringArgumentType.getString(ctx, "abilityId");
+
+											AbilityDefinition def = AbilityRegistry.get(abilityId);
+											if (def == null) {
+												ctx.getSource().sendFailure(Component.literal("§cUnknown ability: " + abilityId));
+												return 0;
+											}
+
+											data.getLoadout().equipAbility(slot, abilityId);
+											syncLoadout(player, data);
+											ctx.getSource().sendSuccess(
+													() -> Component.literal("§6[Cradle] §fSet slot §e" + slot + "§f to §a" + def.getDisplayName() + "§f (level 1)"),
+													true
+											);
+											return 1;
+										})
+										// With level
+										.then(Commands.argument("level", IntegerArgumentType.integer(1, 20))
+												.executes(ctx -> {
+													ServerPlayer player = ctx.getSource().getPlayerOrException();
+													CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+													int slot = IntegerArgumentType.getInteger(ctx, "slot");
+													String abilityId = StringArgumentType.getString(ctx, "abilityId");
+													int level = IntegerArgumentType.getInteger(ctx, "level");
+
+													AbilityDefinition def = AbilityRegistry.get(abilityId);
+													if (def == null) {
+														ctx.getSource().sendFailure(Component.literal("§cUnknown ability: " + abilityId));
+														return 0;
+													}
+
+													data.getLoadout().equipAbility(slot, abilityId, level);
+													syncLoadout(player, data);
+													ctx.getSource().sendSuccess(
+															() -> Component.literal("§6[Cradle] §fSet slot §e" + slot + "§f to §a" + def.getDisplayName() + "§f (level " + level + ")"),
+															true
+													);
+													return 1;
+												})))))
+
+				// /cycle resetloadout — clear all slots + refund SP
+				.then(Commands.literal("resetloadout")
+						.requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+						.executes(ctx -> {
+							ServerPlayer player = ctx.getSource().getPlayerOrException();
+							CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+							PlayerLoadout loadout = data.getLoadout();
+
+							// Count current upgrade levels to refund
+							int totalLevels = 0;
+							for (int i = 0; i < PlayerLoadout.MAX_SLOTS; i++) {
+								if (loadout.hasAbility(i)) {
+									totalLevels += loadout.getUpgradeLevel(i) - 1; // Level 1 is free
+									loadout.clearSlot(i);
+								}
+							}
+							loadout.addUpgradePoints(totalLevels);
+							syncLoadout(player, data);
+							final int refunded = totalLevels;
+							final int totalPoints = loadout.getUpgradePoints();
+							ctx.getSource().sendSuccess(
+									() -> Component.literal("§6[Cradle] §fLoadout reset. §e" + refunded + "§f upgrade points refunded. Total: §e" + totalPoints),
+									true
+							);
+							return 1;
+						}))
 		);
+	}
+
+	/**
+	 * Sync loadout data to client (utility for debug commands).
+	 */
+	private static void syncLoadout(ServerPlayer player, CradlePlayerData data) {
+		PlayerLoadout loadout = data.getLoadout();
+		boolean[] slotActive = new boolean[PlayerLoadout.MAX_SLOTS];
+		for (int i = 0; i < PlayerLoadout.MAX_SLOTS; i++) {
+			slotActive[i] = loadout.isSlotActive(i);
+		}
+		ServerPlayNetworking.send(player, new AbilityLoadoutSyncPayload(
+				loadout.toJsonString(),
+				AbilityLoadoutSyncPayload.buildActiveFlags(slotActive)
+		));
 	}
 }

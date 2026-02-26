@@ -1,6 +1,9 @@
 package com.cradle.mod;
 
+import com.cradle.mod.ability.AbilityRegistry;
+import com.cradle.mod.ability.PlayerLoadout;
 import com.cradle.mod.item.CradleItems;
+import com.cradle.mod.network.AbilityLoadoutSyncPayload;
 import com.cradle.mod.network.OpenIconSelectionPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.particles.ParticleTypes;
@@ -406,15 +409,8 @@ public final class BreakthroughManager {
 			));
 		}
 
-		// Ability unlock message at Copper (Enforcer and Ruler unlock here; Striker is available from Foundation)
-		if (nextStage == CradlePlayerData.AdvancementStage.COPPER) {
-			player.sendSystemMessage(Component.literal(
-					"\u00A76[Cradle] \u00A7a\u2694 Enforcer and Ruler techniques are now available!"
-			));
-			player.sendSystemMessage(Component.literal(
-					"\u00A76[Cradle] \u00A77Use Z (Enforcer), C (Ruler) to channel your arts."
-			));
-		}
+		// ── Skill Tree: stage-gate ability picks + upgrade points ────
+		handleSkillTreeProgression(player, data, nextStage);
 
 		// Monarch world event — visible and audible to ALL players globally
 		if (nextStage == CradlePlayerData.AdvancementStage.MONARCH) {
@@ -423,6 +419,138 @@ public final class BreakthroughManager {
 
 		CradleMod.LOGGER.info("Player {} broke through to {} at level {}",
 				player.getName().getString(), nextStage.name(), data.getPlayerLevel());
+	}
+
+	// ── Skill Tree Progression ──────────────────────────────────────
+
+	/**
+	 * Handles skill tree ability unlocks and upgrade points at each stage gate.
+	 * Called from performBreakthrough after the stage is set and madra is boosted.
+	 *
+	 * - Copper: Prompt to pick 1 of 3 path-specific Strikers (slot 1)
+	 * - Iron: Prompt to pick Enforcer or Ruler (slot 2)
+	 * - Low Gold: Auto-assign remaining type (slot 3)
+	 * - Underlord+: Grant 1 upgrade point per advancement
+	 */
+	private static void handleSkillTreeProgression(ServerPlayer player, CradlePlayerData data,
+												   CradlePlayerData.AdvancementStage stage) {
+		PlayerLoadout loadout = data.getLoadout();
+		String pathName = data.getChosenPath().name();
+
+		switch (stage) {
+			case COPPER -> {
+				// First real technique choice: pick 1 of 3 path-specific Strikers
+				player.displayClientMessage(Component.literal(
+						"\u00A7a\u2694 Striker slot unlocked! Press K to choose a technique."), true);
+			}
+			case IRON -> {
+				// Pick Enforcer or Ruler for slot 2
+				player.displayClientMessage(Component.literal(
+						"\u00A7a\u2694 New slot unlocked! Press K to choose Enforcer or Ruler."), true);
+			}
+			case LOW_GOLD -> {
+				// Auto-assign the remaining type (Enforcer or Ruler) to slot 3
+				// Determine what they already have in slot 2 and give the other
+				String slot2Ability = loadout.getAbility(2);
+				boolean hasEnforcer = false;
+				boolean hasRuler = false;
+
+				// Check all equipped abilities for type
+				for (int i = 0; i < PlayerLoadout.MAX_SLOTS; i++) {
+					String id = loadout.getAbility(i);
+					if (id != null && !id.equals("basic_enforcement")) {
+						var def = AbilityRegistry.get(id);
+						if (def != null) {
+							switch (def.getType()) {
+								case ENFORCER -> hasEnforcer = true;
+								case RULER -> hasRuler = true;
+								default -> {}
+							}
+						}
+					}
+				}
+
+				// Give the missing type
+				String autoAbilityId = null;
+				String autoAbilityName = null;
+				if (!hasRuler) {
+					// Give the path's ruler
+					autoAbilityId = getPathRulerId(pathName);
+					autoAbilityName = "Ruler";
+				} else if (!hasEnforcer) {
+					// Give the path's enforcer
+					autoAbilityId = getPathEnforcerId(pathName);
+					autoAbilityName = "Enforcer";
+				}
+
+				if (autoAbilityId != null && !loadout.hasAbility(3)) {
+					loadout.equipAbility(3, autoAbilityId);
+					var def = AbilityRegistry.get(autoAbilityId);
+					String displayName = def != null ? def.getDisplayName() : autoAbilityId;
+					player.displayClientMessage(Component.literal(
+							"\u00A7a\u2694 " + displayName + " (" + autoAbilityName + ") unlocked!"), true);
+				} else {
+					player.displayClientMessage(Component.literal(
+							"\u00A7a\u2694 New slot unlocked! Press K for Skill Tree."), true);
+				}
+			}
+			case UNDERLORD, OVERLORD, ARCHLORD, SAGE, HERALD, MONARCH -> {
+				// Grant 1 upgrade point per advancement from Underlord+
+				loadout.addUpgradePoints(1);
+				player.displayClientMessage(Component.literal(
+						"\u00A7b\u2B50 Upgrade point gained! (" + loadout.getUpgradePoints()
+								+ " available) Press K to upgrade."), true);
+			}
+			default -> {
+				// No skill tree changes for other stages (Jade, High Gold, Truegold)
+			}
+		}
+
+		// Sync the loadout to the client
+		syncLoadoutToClient(player, data);
+	}
+
+	/**
+	 * Get the path-specific Enforcer ability ID.
+	 */
+	private static String getPathEnforcerId(String pathName) {
+		return switch (pathName) {
+			case "BLACK_FLAME" -> "blackflame_burning_body";
+			case "ENDLESS_SWORD" -> "endless_flowing_edge";
+			case "STELLAR_SPEAR" -> "stellar_alignment";
+			case "CLOUD_HAMMER" -> "cloud_thunderous_weight";
+			case "HOLLOW_KING" -> "hollow_circulation";
+			default -> null;
+		};
+	}
+
+	/**
+	 * Get the path-specific Ruler ability ID.
+	 */
+	private static String getPathRulerId(String pathName) {
+		return switch (pathName) {
+			case "BLACK_FLAME" -> "blackflame_domain_of_ash";
+			case "ENDLESS_SWORD" -> "endless_field_of_blades";
+			case "STELLAR_SPEAR" -> "stellar_spear_domain";
+			case "CLOUD_HAMMER" -> "cloud_gravity_field";
+			case "HOLLOW_KING" -> "hollow_domain";
+			default -> null;
+		};
+	}
+
+	/**
+	 * Sync loadout data to the client (utility wrapper).
+	 */
+	private static void syncLoadoutToClient(ServerPlayer player, CradlePlayerData data) {
+		PlayerLoadout loadout = data.getLoadout();
+		boolean[] slotActive = new boolean[PlayerLoadout.MAX_SLOTS];
+		for (int i = 0; i < PlayerLoadout.MAX_SLOTS; i++) {
+			slotActive[i] = loadout.isSlotActive(i);
+		}
+		ServerPlayNetworking.send(player, new AbilityLoadoutSyncPayload(
+				loadout.toJsonString(),
+				AbilityLoadoutSyncPayload.buildActiveFlags(slotActive)
+		));
 	}
 
 	// ── Monarch World Event ─────────────────────────────────────────

@@ -13,6 +13,8 @@ import com.cradle.mod.network.UseHeraldPayload;
 import com.cradle.mod.network.OpenIconSelectionPayload;
 import com.cradle.mod.network.DuelInviteReceivedPayload;
 import com.cradle.mod.network.DuelEndPayload;
+import com.cradle.mod.network.AbilityLoadoutSyncPayload;
+import com.cradle.mod.network.UseAbilityPayload;
 import com.cradle.mod.block.CradleBlocks;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.StrikerProjectileRenderer;
@@ -57,32 +59,30 @@ public class CradleModClient implements ClientModInitializer {
 			)
 	);
 
-	// Keybind: press Z to toggle Enforcer technique
-	private static final KeyMapping ENFORCER_KEYBIND = KeyBindingHelper.registerKeyBinding(
-			new KeyMapping(
-					"key.cradlemod.enforcer",
-					InputConstants.Type.KEYSYM,
-					GLFW.GLFW_KEY_Z,
-					CRADLE_CATEGORY
-			)
-	);
+	// ── Ability Slot Keybinds (6 slots, new skill tree system) ───────
+	// Slots 0-5 mapped to Z/X/C/R/F/T. Also sends old payloads for backward compat.
+	private static final int[] SLOT_KEYS = {
+			GLFW.GLFW_KEY_Z, GLFW.GLFW_KEY_X, GLFW.GLFW_KEY_C,
+			GLFW.GLFW_KEY_R, GLFW.GLFW_KEY_F, GLFW.GLFW_KEY_T
+	};
+	private static final String[] SLOT_NAMES = {
+			"key.cradlemod.slot0", "key.cradlemod.slot1", "key.cradlemod.slot2",
+			"key.cradlemod.slot3", "key.cradlemod.slot4", "key.cradlemod.slot5"
+	};
+	private static final KeyMapping[] SLOT_KEYBINDS = new KeyMapping[6];
+	static {
+		for (int i = 0; i < 6; i++) {
+			SLOT_KEYBINDS[i] = KeyBindingHelper.registerKeyBinding(
+					new KeyMapping(SLOT_NAMES[i], InputConstants.Type.KEYSYM, SLOT_KEYS[i], CRADLE_CATEGORY));
+		}
+	}
 
-	// Keybind: press X to fire Striker technique
-	private static final KeyMapping STRIKER_KEYBIND = KeyBindingHelper.registerKeyBinding(
+	// Keybind: press K to open Skill Tree screen
+	private static final KeyMapping SKILL_TREE_KEYBIND = KeyBindingHelper.registerKeyBinding(
 			new KeyMapping(
-					"key.cradlemod.striker",
+					"key.cradlemod.skill_tree",
 					InputConstants.Type.KEYSYM,
-					GLFW.GLFW_KEY_X,
-					CRADLE_CATEGORY
-			)
-	);
-
-	// Keybind: press C to toggle Ruler technique
-	private static final KeyMapping RULER_KEYBIND = KeyBindingHelper.registerKeyBinding(
-			new KeyMapping(
-					"key.cradlemod.ruler",
-					InputConstants.Type.KEYSYM,
-					GLFW.GLFW_KEY_C,
+					GLFW.GLFW_KEY_K,
 					CRADLE_CATEGORY
 			)
 	);
@@ -135,6 +135,7 @@ public class CradleModClient implements ClientModInitializer {
 		// ── Reset client data when disconnecting ─────────────────────
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
 			ClientCradleData.reset();
+			ClientLoadoutData.reset();
 		});
 
 		// ── Networking: receive sync packet ───────────────────────────
@@ -142,6 +143,15 @@ public class CradleModClient implements ClientModInitializer {
 				(payload, context) -> {
 					// Update client cache (already on client thread via Fabric API)
 					ClientCradleData.update(payload);
+					// Update loadout slot active flags from the tick-level sync
+					ClientLoadoutData.updateActiveFlags(payload.getSlotActiveFlags());
+				}
+		);
+
+		// ── Networking: receive loadout sync packet ──────────────────
+		ClientPlayNetworking.registerGlobalReceiver(AbilityLoadoutSyncPayload.TYPE,
+				(payload, context) -> {
+					ClientLoadoutData.update(payload);
 				}
 		);
 
@@ -227,6 +237,9 @@ public class CradleModClient implements ClientModInitializer {
 			graphics.drawString(mc.font, "WP", barX - 1, barY - 10, 0xFF6699FF, false);
 		});
 
+		// ── Ability Slot Bar HUD ─────────────────────────────────────
+		HudRenderCallback.EVENT.register(AbilitySlotBarRenderer::render);
+
 		// ── Keybind + Cycling Particles ──────────────────────────────
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (INFO_KEYBIND.consumeClick()) {
@@ -235,15 +248,25 @@ public class CradleModClient implements ClientModInitializer {
 			while (IRON_BODY_KEYBIND.consumeClick()) {
 				ClientPlayNetworking.send(new ToggleIronBodyPayload());
 			}
-			while (ENFORCER_KEYBIND.consumeClick()) {
-				ClientPlayNetworking.send(new UseEnforcerPayload());
+
+			// Ability slot keybinds (Z/X/C/R/F/T → slots 0-5)
+			for (int i = 0; i < 6; i++) {
+				while (SLOT_KEYBINDS[i].consumeClick()) {
+					ClientPlayNetworking.send(new UseAbilityPayload(i));
+					// Start visual cooldown for striker abilities
+					String abilityId = ClientLoadoutData.getAbilityId(i);
+					if (abilityId != null && isStrikerAbility(abilityId)) {
+						long cooldownMs = getStrikerCooldownMs(abilityId);
+						ClientLoadoutData.startCooldown(i, cooldownMs);
+					}
+				}
 			}
-			while (STRIKER_KEYBIND.consumeClick()) {
-				ClientPlayNetworking.send(new UseStrikerPayload());
+
+			// K key: open Skill Tree screen
+			while (SKILL_TREE_KEYBIND.consumeClick()) {
+				client.setScreen(new SkillTreeScreen());
 			}
-			while (RULER_KEYBIND.consumeClick()) {
-				ClientPlayNetworking.send(new UseRulerPayload());
-			}
+
 			while (CYCLING_KEYBIND.consumeClick()) {
 				ClientPlayNetworking.send(new ToggleCyclingPayload());
 			}
@@ -277,4 +300,34 @@ public class CradleModClient implements ClientModInitializer {
 		});
 	}
 
+	/**
+	 * Check if an ability ID is a striker type (for cooldown display).
+	 * Uses the same Sets defined in SkillTreeScreen.
+	 */
+	private static boolean isStrikerAbility(String id) {
+		if (id == null) return false;
+		return SkillTreeScreen.STRIKER_IDS.contains(id);
+	}
+
+	/**
+	 * Get approximate cooldown for a striker ability (for visual display).
+	 * Must match the values in AbilityDefinitions on the server.
+	 */
+	private static long getStrikerCooldownMs(String id) {
+		if (id == null) return 2000L;
+		return switch (id) {
+			// Base strikers: 2 seconds
+			case "blackflame_burst", "endless_slash", "stellar_piercing_star",
+				 "cloud_falling_hammer", "hollow_empty_palm" -> 2000L;
+			// Branch strikers: longer cooldowns
+			case "blackflame_meteor" -> 4000L;
+			case "endless_sword_storm" -> 3500L;
+			case "stellar_nova" -> 4000L;
+			case "cloud_thunderstrike" -> 5000L;
+			case "hollow_nullify" -> 3500L;
+			// Universal striker
+			case "universal_spirit_pulse" -> 3000L;
+			default -> 2000L;
+		};
+	}
 }

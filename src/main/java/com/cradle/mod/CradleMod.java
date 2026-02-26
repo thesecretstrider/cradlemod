@@ -21,6 +21,16 @@ import com.cradle.mod.network.OpenIconSelectionPayload;
 import com.cradle.mod.network.ChooseIconPayload;
 import com.cradle.mod.network.DuelInviteReceivedPayload;
 import com.cradle.mod.network.DuelEndPayload;
+import com.cradle.mod.network.UseAbilityPayload;
+import com.cradle.mod.network.UpgradeAbilityPayload;
+import com.cradle.mod.network.SwapAbilityPayload;
+import com.cradle.mod.network.BranchAbilityPayload;
+import com.cradle.mod.network.ChooseAbilityPayload;
+import com.cradle.mod.network.AbilityLoadoutSyncPayload;
+import com.cradle.mod.ability.AbilityExecutor;
+import com.cradle.mod.ability.AbilityDefinition;
+import com.cradle.mod.ability.AbilityRegistry;
+import com.cradle.mod.ability.PlayerLoadout;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.StrikerProjectileEntity;
 import net.fabricmc.api.ModInitializer;
@@ -95,6 +105,9 @@ public class CradleMod implements ModInitializer {
 		// Register custom entity types
 		CradleEntities.register();
 
+		// Register ability definitions (skill tree system)
+		AbilityRegistry.registerAll();
+
 		// Register worldgen (bush spawning) and loot table modifications (Spirit Stone in chests)
 		CradleWorldGen.register();
 		CradleLootTables.register();
@@ -106,6 +119,7 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playS2C().register(OpenIconSelectionPayload.TYPE, OpenIconSelectionPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playS2C().register(DuelInviteReceivedPayload.TYPE, DuelInviteReceivedPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playS2C().register(DuelEndPayload.TYPE, DuelEndPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playS2C().register(AbilityLoadoutSyncPayload.TYPE, AbilityLoadoutSyncPayload.STREAM_CODEC);
 
 		// Register networking packets (client -> server)
 		PayloadTypeRegistry.playC2S().register(ChoosePathPayload.TYPE, ChoosePathPayload.STREAM_CODEC);
@@ -119,12 +133,18 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(UseSagePayload.TYPE, UseSagePayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(UseHeraldPayload.TYPE, UseHeraldPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(ChooseIconPayload.TYPE, ChooseIconPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(UseAbilityPayload.TYPE, UseAbilityPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(UpgradeAbilityPayload.TYPE, UpgradeAbilityPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(SwapAbilityPayload.TYPE, SwapAbilityPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(BranchAbilityPayload.TYPE, BranchAbilityPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(ChooseAbilityPayload.TYPE, ChooseAbilityPayload.STREAM_CODEC);
 
 		// Send initial data sync when a player joins, and open path selection if needed
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			ServerPlayer player = handler.getPlayer();
 			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
 			sync(player, data);
+			syncLoadout(player, data);
 			// Grant flight if the player's stage qualifies
 			if (data.canFly()) {
 				CyclingManager.enableFlight(player, data);
@@ -158,8 +178,12 @@ public class CradleMod implements ModInitializer {
 			// Set the path
 			data.setChosenPath(path);
 
+			// Auto-assign Basic Enforcement to slot 0 (every sacred artist learns this first)
+			data.getLoadout().equipAbility(0, "basic_enforcement");
+
 			autoSave(player.level().getServer());
 			sync(player, data);
+			syncLoadout(player, data);
 
 			// Path-specific lore
 			player.sendSystemMessage(Component.literal(
@@ -183,7 +207,7 @@ public class CradleMod implements ModInitializer {
 					"\u00A76[Cradle] \u00A77Begin cycling (G) to strengthen your madra channels."
 			));
 			player.sendSystemMessage(Component.literal(
-					"\u00A76[Cradle] \u00A7a\u2694 Striker technique unlocked! Press X to fire."
+					"\u00A76[Cradle] \u00A7a\u2694 Basic Enforcement unlocked! Press Z to activate."
 			));
 		});
 
@@ -395,6 +419,129 @@ public class CradleMod implements ModInitializer {
 				player.sendSystemMessage(Component.literal("\u00A76[Cradle] \u00A7a" + name + " activated!"));
 			}
 			sync(player, data);
+		});
+
+		// Handle skill-tree ability use (any slot). New system delegates to AbilityExecutor.
+		ServerPlayNetworking.registerGlobalReceiver(UseAbilityPayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+			AbilityExecutor.handleUseAbility(player, payload.slot());
+			sync(player, data);
+			syncLoadout(player, data);
+		});
+
+		// Handle ability upgrade (skill tree). Spend 1 upgrade point to level up.
+		ServerPlayNetworking.registerGlobalReceiver(UpgradeAbilityPayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+			PlayerLoadout loadout = data.getLoadout();
+			if (loadout.upgradeSlot(payload.slot())) {
+				String abilityId = loadout.getAbility(payload.slot());
+				AbilityDefinition def = AbilityRegistry.get(abilityId);
+				String name = def != null ? def.getDisplayName() : abilityId;
+				player.displayClientMessage(Component.literal(
+						"\u00A7a" + name + " upgraded to level " + loadout.getUpgradeLevel(payload.slot()) + "!"), true);
+				autoSave(player.level().getServer());
+			} else {
+				player.displayClientMessage(Component.literal("\u00A7cCannot upgrade that ability."), true);
+			}
+			sync(player, data);
+			syncLoadout(player, data);
+		});
+
+		// Handle ability swap (skill tree). Change equipped ability, resets level.
+		ServerPlayNetworking.registerGlobalReceiver(SwapAbilityPayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+			PlayerLoadout loadout = data.getLoadout();
+
+			// Validate the ability exists
+			AbilityDefinition def = AbilityRegistry.get(payload.newAbilityId());
+			if (def == null) return;
+
+			// Validate path compatibility
+			if (!def.isUniversal() && def.getRequiredPath() != data.getChosenPath()) {
+				player.displayClientMessage(Component.literal("\u00A7cThat ability is not for your path!"), true);
+				return;
+			}
+
+			// Validate stage requirement
+			if (data.getAdvancementStage().ordinal() < def.getUnlockStage().ordinal()) {
+				player.displayClientMessage(Component.literal(
+						"\u00A7cRequires " + def.getUnlockStage().displayName() + " to equip " + def.getDisplayName()), true);
+				return;
+			}
+
+			// Deactivate the slot if it's active
+			if (loadout.isSlotActive(payload.slot())) {
+				loadout.setSlotActive(payload.slot(), false);
+			}
+
+			loadout.equipAbility(payload.slot(), payload.newAbilityId());
+			player.displayClientMessage(Component.literal(
+					"\u00A7eSwapped to " + def.getDisplayName() + " (level reset to 1)"), true);
+			autoSave(player.level().getServer());
+			sync(player, data);
+			syncLoadout(player, data);
+		});
+
+		// Handle ability branch (skill tree). Fork an ability into a new technique.
+		ServerPlayNetworking.registerGlobalReceiver(BranchAbilityPayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+			PlayerLoadout loadout = data.getLoadout();
+			if (loadout.branchAbility(payload.sourceSlot(), payload.targetSlot())) {
+				String srcId = loadout.getAbility(payload.sourceSlot());
+				String tgtId = loadout.getAbility(payload.targetSlot());
+				AbilityDefinition srcDef = AbilityRegistry.get(srcId);
+				AbilityDefinition tgtDef = AbilityRegistry.get(tgtId);
+				player.displayClientMessage(Component.literal(
+						"\u00A7d" + (srcDef != null ? srcDef.getDisplayName() : srcId)
+								+ " branched into " + (tgtDef != null ? tgtDef.getDisplayName() : tgtId) + "!"), true);
+				autoSave(player.level().getServer());
+			} else {
+				player.displayClientMessage(Component.literal("\u00A7cCannot branch that ability."), true);
+			}
+			sync(player, data);
+			syncLoadout(player, data);
+		});
+
+		// Handle stage-gate ability pick (Copper/Iron/Low Gold).
+		// Player picks an ability for a specific slot during advancement.
+		ServerPlayNetworking.registerGlobalReceiver(ChooseAbilityPayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+			PlayerLoadout loadout = data.getLoadout();
+			String abilityId = payload.abilityId();
+			int slot = payload.slot();
+
+			// Validate slot is empty (stage-gate picks go into empty slots)
+			if (loadout.hasAbility(slot)) {
+				player.displayClientMessage(Component.literal("\u00A7cThat slot already has an ability."), true);
+				return;
+			}
+
+			// Validate ability exists
+			AbilityDefinition def = AbilityRegistry.get(abilityId);
+			if (def == null) {
+				player.displayClientMessage(Component.literal("\u00A7cUnknown ability."), true);
+				return;
+			}
+
+			// Validate path matches (or is universal)
+			if (def.getRequiredPath() != null
+					&& !def.getRequiredPath().equals(data.getChosenPath().name())) {
+				player.displayClientMessage(Component.literal("\u00A7cThat ability is not for your path."), true);
+				return;
+			}
+
+			// Equip the ability
+			loadout.equipAbility(slot, abilityId);
+			player.displayClientMessage(Component.literal(
+					"\u00A7a\u2694 " + def.getDisplayName() + " equipped to Slot " + (slot + 1) + "!"), true);
+			autoSave(player.level().getServer());
+			sync(player, data);
+			syncLoadout(player, data);
 		});
 
 		// Handle Sage Authority (V key). Requires hasSage. Costs Willpower + has cooldown.
@@ -712,6 +859,7 @@ public class CradleMod implements ModInitializer {
 		// so stale data doesn't leak into the next world in the same MC session
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
 			DuelManager.clearAll();
+			AbilityExecutor.clearAll();
 			autoSave(server);
 			LOGGER.info("Saved Cradle player data for {} players on shutdown.", CradlePlayerData.getAll().size());
 			// Clear in-memory data so it doesn't carry over to the next world
@@ -777,6 +925,9 @@ public class CradleMod implements ModInitializer {
 			data.setSwordCycling(false);
 			data.setUnderlordFlying(false);
 			data.setSpiritShiftActive(false);
+			// Deactivate all skill tree loadout slots
+			data.getLoadout().deactivateAll();
+			AbilityExecutor.cleanupPlayer(newPlayer);
 
 			// Re-grant flight capability if stage qualifies (sets mayfly on the NEW entity)
 			if (data.canFly()) {
@@ -810,6 +961,9 @@ public class CradleMod implements ModInitializer {
 				if (data.isActivelyCycling()) CyclingManager.stopCycling(player, data);
 				if (data.isUnderlordFlying()) CyclingManager.disableFlight(player, data);
 				if (data.isSpiritShiftActive()) CyclingManager.deactivateSpiritShift(player, data);
+				// Clean up skill tree loadout state
+				data.getLoadout().deactivateAll();
+				AbilityExecutor.cleanupPlayer(player);
 			}
 			RevelationTrialManager.cancelTrial(player.getUUID());
 			DuelManager.onPlayerDisconnect(player.getUUID(), server);
@@ -909,6 +1063,19 @@ public class CradleMod implements ModInitializer {
 	/** Sends a sync packet to the client. */
 	private static void sync(ServerPlayer player, CradlePlayerData data) {
 		ServerPlayNetworking.send(player, CyclingManager.createSyncPayload(player, data));
+	}
+
+	/** Sends a loadout sync packet to the client. */
+	private static void syncLoadout(ServerPlayer player, CradlePlayerData data) {
+		PlayerLoadout loadout = data.getLoadout();
+		boolean[] slotActive = new boolean[PlayerLoadout.MAX_SLOTS];
+		for (int i = 0; i < PlayerLoadout.MAX_SLOTS; i++) {
+			slotActive[i] = loadout.isSlotActive(i);
+		}
+		ServerPlayNetworking.send(player, new AbilityLoadoutSyncPayload(
+				loadout.toJsonString(),
+				AbilityLoadoutSyncPayload.buildActiveFlags(slotActive)
+		));
 	}
 
 	// ── Persistence ──────────────────────────────────────────────────

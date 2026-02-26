@@ -1,5 +1,6 @@
 package com.cradle.mod;
 
+import com.cradle.mod.ability.PlayerLoadout;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
@@ -236,6 +237,7 @@ public final class CradlePlayerData {
 	private int duelWins;
 	private int duelLosses;
 	private int duelDraws;
+	private PlayerLoadout loadout;
 
 	private static final float DEFAULT_MAX_MADRA = 100.0f;
 	private static final float DEFAULT_MAX_WILLPOWER = 50.0f;
@@ -263,6 +265,7 @@ public final class CradlePlayerData {
 		this.duelWins = 0;
 		this.duelLosses = 0;
 		this.duelDraws = 0;
+		this.loadout = new PlayerLoadout();
 	}
 
 	// ── Getters / setters ──────────────────────────────────────────────
@@ -439,6 +442,9 @@ public final class CradlePlayerData {
 	public int getDuelDraws() { return duelDraws; }
 	public void setDuelDraws(int duelDraws) { this.duelDraws = Math.max(0, duelDraws); }
 
+	public PlayerLoadout getLoadout() { return loadout; }
+	public void setLoadout(PlayerLoadout loadout) { this.loadout = Objects.requireNonNull(loadout, "loadout"); }
+
 	/**
 	 * Returns true if this player has unlocked willpower (Archlord+).
 	 * Willpower is the resource used for Sage Authority and Herald powers.
@@ -580,6 +586,7 @@ public final class CradlePlayerData {
 		tag.putInt("duelWins", duelWins);
 		tag.putInt("duelLosses", duelLosses);
 		tag.putInt("duelDraws", duelDraws);
+		tag.put("loadout", loadout.toNbt());
 		return tag;
 	}
 
@@ -636,6 +643,15 @@ public final class CradlePlayerData {
 		data.duelWins = tag.getIntOr("duelWins", 0);
 		data.duelLosses = tag.getIntOr("duelLosses", 0);
 		data.duelDraws = tag.getIntOr("duelDraws", 0);
+
+		// Load or migrate ability loadout
+		if (tag.contains("loadout")) {
+			CompoundTag loadoutTag = tag.getCompoundOrEmpty("loadout");
+			data.loadout = PlayerLoadout.fromNbt(loadoutTag);
+		} else {
+			// Migration: old save with no loadout — auto-create from path+stage
+			data.loadout = PlayerLoadout.createMigrationLoadout(data);
+		}
 
 		return data;
 	}

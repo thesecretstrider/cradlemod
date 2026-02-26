@@ -46,6 +46,7 @@ public class StrikerProjectileEntity extends AbstractHurtingProjectile {
 	private int pierceCount = 0;
 	private float baseDamage = 8.0f;
 	private float powerMultiplier = 1.0f;
+	private String abilityId = ""; // Skill tree ability ID (empty = use old path-based behavior)
 
 	// Max lifetime in ticks before auto-discard (prevents eternal projectiles)
 	private static final int MAX_LIFETIME_TICKS = 100; // 5 seconds
@@ -96,6 +97,14 @@ public class StrikerProjectileEntity extends AbstractHurtingProjectile {
 
 	public String getPathName() {
 		return this.entityData.get(PATH);
+	}
+
+	public String getAbilityId() {
+		return abilityId;
+	}
+
+	public void setAbilityId(String abilityId) {
+		this.abilityId = abilityId != null ? abilityId : "";
 	}
 
 	@Override

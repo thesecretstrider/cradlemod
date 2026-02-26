@@ -366,7 +366,10 @@
       "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap\" -classpath \"C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\1.21.11\\\\net.fabricmc.fabric-api\\\\fabric-entity-events-v1\\\\0.49.1+0e23476698\\\\fabric-entity-events-v1-0.49.1+0e23476698.jar\" net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents)",
       "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap\" -classpath \"C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-server\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\minecraft-server-1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2.jar\" net.minecraft.server.level.ServerPlayer)",
       "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap\" -classpath \"C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-client\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\minecraft-client-1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2.jar\" net.minecraft.client.player.LocalPlayer)",
-      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap\" -classpath \"C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-common\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\minecraft-common-1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2.jar\" net.minecraft.client.player.LocalPlayer)"
+      "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap\" -classpath \"C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-common\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\minecraft-common-1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2.jar\" net.minecraft.client.player.LocalPlayer)",
+      "mcp__48bafe2c-81b7-4077-a4c2-25d77e7928fa__notion-create-pages",
+      "WebFetch(domain:abidan-archives.fandom.com)",
+      "mcp__48bafe2c-81b7-4077-a4c2-25d77e7928fa__notion-update-page"
     ]
   }
 }

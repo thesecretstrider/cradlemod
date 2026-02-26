@@ -21,6 +21,8 @@ import net.minecraft.resources.Identifier;
  *   bit 6 (64) = hasHerald
  *   bit 7 (128) = swordCycling
  *   bit 8 (256) = flying
+ *   bit 9 (512) = spiritShiftActive
+ *   bits 10-15 (1024-32768) = loadout slot 0-5 active state
  */
 public record CradleSyncPayload(
 		int level,
@@ -48,6 +50,8 @@ public record CradleSyncPayload(
 	public static final int FLAG_SWORD_CYCLING    = 128;
 	public static final int FLAG_FLYING           = 256;
 	public static final int FLAG_SPIRIT_SHIFT     = 512;
+	// Bits 10-15: loadout slot 0-5 active state (for real-time HUD updates)
+	public static final int FLAG_SLOT_ACTIVE_BASE  = 1024; // bit 10 = slot 0
 
 	public static final Type<CradleSyncPayload> TYPE =
 			new Type<>(Identifier.fromNamespaceAndPath("cradlemod", "cradle_sync"));
@@ -101,6 +105,26 @@ public record CradleSyncPayload(
 		if (flying)          f |= FLAG_FLYING;
 		if (spiritShiftActive) f |= FLAG_SPIRIT_SHIFT;
 		return f;
+	}
+
+	/**
+	 * Add loadout slot active flags to an existing flags int.
+	 * Slots 0-5 are mapped to bits 10-15.
+	 */
+	public static int addSlotActiveFlags(int baseFlags, boolean[] slotActive) {
+		int f = baseFlags;
+		for (int i = 0; i < Math.min(slotActive.length, 6); i++) {
+			if (slotActive[i]) f |= (FLAG_SLOT_ACTIVE_BASE << i);
+		}
+		return f;
+	}
+
+	/**
+	 * Extract the slot active flags (bits 10-15) as an int suitable for
+	 * ClientLoadoutData.updateActiveFlags().
+	 */
+	public int getSlotActiveFlags() {
+		return (flags >> 10) & 0x3F; // 6 bits
 	}
 
 	@Override

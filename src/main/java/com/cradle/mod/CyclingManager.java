@@ -1,5 +1,7 @@
 package com.cradle.mod;
 
+import com.cradle.mod.ability.AbilityExecutor;
+import com.cradle.mod.ability.PlayerLoadout;
 import com.cradle.mod.network.CradleSyncPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
@@ -261,8 +263,8 @@ public final class CyclingManager {
 				}
 			}
 
-			// ── Enforcer technique tick (R key toggle) ──────────────────
-			if (data.isEnforcerActive()) {
+			// ── Enforcer technique tick (old system — skipped if new loadout system is in use) ──
+			if (data.isEnforcerActive() && data.getLoadout().equippedCount() == 0) {
 				// Drain Madra each tick
 				float drain = ENFORCER_MADRA_DRAIN_PER_TICK;
 
@@ -288,8 +290,8 @@ public final class CyclingManager {
 				}
 			}
 
-			// ── Ruler technique tick (C key toggle) ──────────────────
-			if (data.isRulerActive()) {
+			// ── Ruler technique tick (old system — skipped if new loadout system is in use) ──
+			if (data.isRulerActive() && data.getLoadout().equippedCount() == 0) {
 				float drain = RULER_MADRA_DRAIN_PER_TICK * data.getMadraCostMultiplier();
 				data.setCurrentMadra(data.getCurrentMadra() - drain);
 
@@ -309,6 +311,12 @@ public final class CyclingManager {
 					}
 				}
 			}
+
+			// ── Skill tree loadout tick (new system) ──────────────────
+			// Processes active enforcer/ruler abilities from the player's loadout.
+			// Runs alongside old system during transition; once old keybinds are
+			// replaced in Phase D, the legacy enforcer/ruler blocks above can be removed.
+			AbilityExecutor.tickPlayerAbilities(player, data);
 
 			// Active cycling: faster XP + Madra gain, but must stand still (unless Herald)
 			if (data.isActivelyCycling()) {
@@ -855,6 +863,27 @@ public final class CyclingManager {
 	 * Requires the ServerPlayer to check if they can advance (inventory check).
 	 */
 	public static CradleSyncPayload createSyncPayload(ServerPlayer player, CradlePlayerData data) {
+		int baseFlags = CradleSyncPayload.buildFlags(
+				data.isActivelyCycling(),
+				BreakthroughManager.canAdvance(player, data),
+				data.isIronBodyActive(),
+				data.isEnforcerActive(),
+				data.isRulerActive(),
+				data.hasSage(),
+				data.hasHerald(),
+				data.isSwordCycling(),
+				data.isUnderlordFlying(),
+				data.isSpiritShiftActive()
+		);
+
+		// Add loadout slot active flags (bits 10-15) for HUD real-time updates
+		PlayerLoadout loadout = data.getLoadout();
+		boolean[] slotActive = new boolean[PlayerLoadout.MAX_SLOTS];
+		for (int i = 0; i < PlayerLoadout.MAX_SLOTS; i++) {
+			slotActive[i] = loadout.isSlotActive(i);
+		}
+		int flags = CradleSyncPayload.addSlotActiveFlags(baseFlags, slotActive);
+
 		return new CradleSyncPayload(
 				data.getPlayerLevel(),
 				data.getCyclingXp(),
@@ -863,18 +892,7 @@ public final class CyclingManager {
 				data.getAdvancementStage().name(),
 				data.getCurrentMadra(),
 				data.getMaxMadra(),
-				CradleSyncPayload.buildFlags(
-						data.isActivelyCycling(),
-						BreakthroughManager.canAdvance(player, data),
-						data.isIronBodyActive(),
-						data.isEnforcerActive(),
-						data.isRulerActive(),
-						data.hasSage(),
-						data.hasHerald(),
-						data.isSwordCycling(),
-						data.isUnderlordFlying(),
-						data.isSpiritShiftActive()
-				),
+				flags,
 				data.getIronBody().name(),
 				data.getCurrentWillpower(),
 				data.getMaxWillpower(),

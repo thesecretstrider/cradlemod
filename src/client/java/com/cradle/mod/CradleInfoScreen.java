@@ -42,6 +42,10 @@ public class CradleInfoScreen extends Screen {
 	private boolean heraldBtnHovered = false;
 	private boolean showingChoice = false;
 
+	// Skill Tree button position
+	private int skillTreeBtnX, skillTreeBtnY;
+	private boolean skillTreeBtnHovered = false;
+
 	public CradleInfoScreen() {
 		super(Component.literal("Sacred Artist Status"));
 	}
@@ -273,6 +277,24 @@ public class CradleInfoScreen extends Screen {
 			heraldBtnHovered = false;
 		}
 
+		// Skill Tree button (bottom of panel, before hint)
+		if (ClientCradleData.hasChosenPath()) {
+			int stBtnW = 100;
+			int stBtnH = 16;
+			skillTreeBtnX = centerX - stBtnW / 2;
+			skillTreeBtnY = panelTop + PANEL_HEIGHT - 32;
+			skillTreeBtnHovered = mouseX >= skillTreeBtnX && mouseX <= skillTreeBtnX + stBtnW
+					&& mouseY >= skillTreeBtnY && mouseY <= skillTreeBtnY + stBtnH;
+			int stColor = skillTreeBtnHovered ? 0xFF444466 : 0xFF333355;
+			graphics.fill(skillTreeBtnX - 1, skillTreeBtnY - 1,
+					skillTreeBtnX + stBtnW + 1, skillTreeBtnY + stBtnH + 1, 0xFF6666AA);
+			graphics.fill(skillTreeBtnX, skillTreeBtnY,
+					skillTreeBtnX + stBtnW, skillTreeBtnY + stBtnH, stColor);
+			int stTextColor = skillTreeBtnHovered ? 0xFFAAAAFF : 0xFF8888CC;
+			graphics.drawCenteredString(this.font, "\u2728 Skill Tree (K)",
+					centerX, skillTreeBtnY + 4, stTextColor);
+		}
+
 		// Hint at the bottom
 		graphics.drawCenteredString(this.font, "Press ESC to close | J to toggle",
 				centerX, panelTop + PANEL_HEIGHT - 12, 0x66FFFFFF);
@@ -283,6 +305,11 @@ public class CradleInfoScreen extends Screen {
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean bl) {
 		if (event.button() == 0) {
+			// Skill Tree button
+			if (skillTreeBtnHovered && ClientCradleData.hasChosenPath()) {
+				this.minecraft.setScreen(new SkillTreeScreen());
+				return true;
+			}
 			// Sage/Herald choice buttons
 			if (showingChoice && sageBtnHovered) {
 				ClientPlayNetworking.send(new ChooseSageHeraldPayload("SAGE"));
