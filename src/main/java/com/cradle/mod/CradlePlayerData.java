@@ -238,6 +238,7 @@ public final class CradlePlayerData {
 	private int duelLosses;
 	private int duelDraws;
 	private PlayerLoadout loadout;
+	private boolean copperSightActive; // Toggle for Copper Sight aura particles (Copper+ only)
 
 	private static final float DEFAULT_MAX_MADRA = 100.0f;
 	private static final float DEFAULT_MAX_WILLPOWER = 50.0f;
@@ -266,6 +267,7 @@ public final class CradlePlayerData {
 		this.duelLosses = 0;
 		this.duelDraws = 0;
 		this.loadout = new PlayerLoadout();
+		this.copperSightActive = false;
 	}
 
 	// ── Getters / setters ──────────────────────────────────────────────
@@ -445,6 +447,9 @@ public final class CradlePlayerData {
 	public PlayerLoadout getLoadout() { return loadout; }
 	public void setLoadout(PlayerLoadout loadout) { this.loadout = Objects.requireNonNull(loadout, "loadout"); }
 
+	public boolean isCopperSightActive() { return copperSightActive; }
+	public void setCopperSightActive(boolean copperSightActive) { this.copperSightActive = copperSightActive; }
+
 	/**
 	 * Returns true if this player has unlocked willpower (Archlord+).
 	 * Willpower is the resource used for Sage Authority and Herald powers.
@@ -587,6 +592,7 @@ public final class CradlePlayerData {
 		tag.putInt("duelLosses", duelLosses);
 		tag.putInt("duelDraws", duelDraws);
 		tag.put("loadout", loadout.toNbt());
+		tag.putBoolean("copperSightActive", copperSightActive);
 		return tag;
 	}
 
@@ -643,6 +649,8 @@ public final class CradlePlayerData {
 		data.duelWins = tag.getIntOr("duelWins", 0);
 		data.duelLosses = tag.getIntOr("duelLosses", 0);
 		data.duelDraws = tag.getIntOr("duelDraws", 0);
+
+		data.copperSightActive = tag.getBooleanOr("copperSightActive", false);
 
 		// Load or migrate ability loadout
 		if (tag.contains("loadout")) {

@@ -30,6 +30,7 @@ public final class ClientCradleData {
 	public static float currentWillpower = 0f;
 	public static float maxWillpower = 50f;
 	public static String icon = "NONE";
+	public static boolean copperSightActive = false;
 
 	/**
 	 * Reset all client data to defaults. Called when disconnecting from a world
@@ -56,6 +57,7 @@ public final class ClientCradleData {
 		currentWillpower = 0f;
 		maxWillpower = 50f;
 		icon = "NONE";
+		copperSightActive = false;
 	}
 
 	public static void update(CradleSyncPayload payload) {
@@ -79,6 +81,7 @@ public final class ClientCradleData {
 		currentWillpower = payload.currentWillpower();
 		maxWillpower = payload.maxWillpower();
 		icon = payload.icon();
+		copperSightActive = payload.copperSightActive();
 	}
 
 	/**
@@ -299,5 +302,13 @@ public final class ClientCradleData {
 	 */
 	public static boolean hasIcon() {
 		return !"NONE".equals(icon);
+	}
+
+	/**
+	 * Returns true if the player is at Copper stage or higher.
+	 * Copper Sight toggle is available at Copper+.
+	 */
+	public static boolean isCopper() {
+		return !"FOUNDATION".equals(stage);
 	}
 }

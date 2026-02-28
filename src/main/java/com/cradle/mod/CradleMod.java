@@ -27,6 +27,7 @@ import com.cradle.mod.network.SwapAbilityPayload;
 import com.cradle.mod.network.BranchAbilityPayload;
 import com.cradle.mod.network.ChooseAbilityPayload;
 import com.cradle.mod.network.AbilityLoadoutSyncPayload;
+import com.cradle.mod.network.ToggleCopperSightPayload;
 import com.cradle.mod.ability.AbilityExecutor;
 import com.cradle.mod.ability.AbilityDefinition;
 import com.cradle.mod.ability.AbilityRegistry;
@@ -138,6 +139,7 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(SwapAbilityPayload.TYPE, SwapAbilityPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(BranchAbilityPayload.TYPE, BranchAbilityPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(ChooseAbilityPayload.TYPE, ChooseAbilityPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(ToggleCopperSightPayload.TYPE, ToggleCopperSightPayload.STREAM_CODEC);
 
 		// Send initial data sync when a player joins, and open path selection if needed
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
@@ -284,6 +286,26 @@ public class CradleMod implements ModInitializer {
 				player.displayClientMessage(Component.literal(
 						"\u00A7fYou begin cycling. Madra flows through you..."), true);
 			}
+			sync(player, data);
+		});
+
+		// Handle Copper Sight toggle (H key). Requires Copper+ stage.
+		ServerPlayNetworking.registerGlobalReceiver(ToggleCopperSightPayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+
+			// Must be at least Copper to see vital aura
+			if (data.getAdvancementStage().ordinal() < CradlePlayerData.AdvancementStage.COPPER.ordinal()) {
+				player.displayClientMessage(Component.literal(
+						"\u00A7cCopper Sight requires Copper stage or higher."), true);
+				return;
+			}
+
+			boolean newState = !data.isCopperSightActive();
+			data.setCopperSightActive(newState);
+			player.displayClientMessage(Component.literal(
+					newState ? "\u00A7bCopper Sight activated. Vital aura revealed."
+							: "\u00A77Copper Sight deactivated."), true);
 			sync(player, data);
 		});
 
@@ -1009,8 +1031,10 @@ public class CradleMod implements ModInitializer {
 	private static boolean isHostile(LivingEntity entity, Player player) {
 		if (entity instanceof net.minecraft.world.entity.monster.Monster) return true;
 		if (entity instanceof Mob mob && mob.getTarget() == player) return true;
-		// Hostile wolves (from dreadbeast mixin) target players
+		// Dreadbeast animals (all modified by mixins to be hostile)
 		if (entity instanceof net.minecraft.world.entity.animal.wolf.Wolf wolf && !wolf.isTame()) return true;
+		if (entity instanceof net.minecraft.world.entity.animal.cow.Cow) return true;
+		if (entity instanceof net.minecraft.world.entity.animal.sheep.Sheep) return true;
 		return false;
 	}
 

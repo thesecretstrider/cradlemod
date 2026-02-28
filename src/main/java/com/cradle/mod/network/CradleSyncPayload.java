@@ -23,6 +23,7 @@ import net.minecraft.resources.Identifier;
  *   bit 8 (256) = flying
  *   bit 9 (512) = spiritShiftActive
  *   bits 10-15 (1024-32768) = loadout slot 0-5 active state
+ *   bit 16 (65536) = copperSightActive
  */
 public record CradleSyncPayload(
 		int level,
@@ -52,6 +53,7 @@ public record CradleSyncPayload(
 	public static final int FLAG_SPIRIT_SHIFT     = 512;
 	// Bits 10-15: loadout slot 0-5 active state (for real-time HUD updates)
 	public static final int FLAG_SLOT_ACTIVE_BASE  = 1024; // bit 10 = slot 0
+	public static final int FLAG_COPPER_SIGHT      = 65536; // bit 16
 
 	public static final Type<CradleSyncPayload> TYPE =
 			new Type<>(Identifier.fromNamespaceAndPath("cradlemod", "cradle_sync"));
@@ -84,6 +86,7 @@ public record CradleSyncPayload(
 	public boolean swordCycling()    { return (flags & FLAG_SWORD_CYCLING) != 0; }
 	public boolean flying()          { return (flags & FLAG_FLYING) != 0; }
 	public boolean spiritShiftActive() { return (flags & FLAG_SPIRIT_SHIFT) != 0; }
+	public boolean copperSightActive() { return (flags & FLAG_COPPER_SIGHT) != 0; }
 
 	/**
 	 * Helper to build the flags int from individual booleans.

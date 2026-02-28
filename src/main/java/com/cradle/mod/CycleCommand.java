@@ -311,6 +311,21 @@ public final class CycleCommand {
 													return 1;
 												})))))
 
+				// /cycle togglecoppersight — debug: toggle copper sight
+				.then(Commands.literal("togglecoppersight")
+						.requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+						.executes(ctx -> {
+							ServerPlayer player = ctx.getSource().getPlayerOrException();
+							CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+							boolean newState = !data.isCopperSightActive();
+							data.setCopperSightActive(newState);
+							ctx.getSource().sendSuccess(
+									() -> Component.literal("§6[Cradle] §fCopper Sight §e" + (newState ? "enabled" : "disabled")),
+									true
+							);
+							return 1;
+						}))
+
 				// /cycle resetloadout — clear all slots + refund SP
 				.then(Commands.literal("resetloadout")
 						.requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))

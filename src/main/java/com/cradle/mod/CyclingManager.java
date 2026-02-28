@@ -783,7 +783,9 @@ public final class CyclingManager {
 
 	/**
 	 * Returns the environmental cycling bonus (cached, rechecked every second).
-	 * Black Flame 1.5x near fire/lava, Cloud Hammer 1.5x at Y>=128, others 1.0x.
+	 * Black Flame gets 1.5x in fire-aura biomes; Cloud Hammer gets 1.5x in wind-aura biomes.
+	 * Sword paths use sword cycling bonus instead. Hollow King has no env bonus.
+	 * Foundation players get no aura bonus (internal cycling only — lore-accurate).
 	 * Shows an action bar message when the bonus first activates.
 	 */
 	private static float getEnvironmentalBonus(ServerPlayer player, CradlePlayerData data) {
@@ -800,39 +802,41 @@ public final class CyclingManager {
 
 		// Notify when bonus activates (transition from 1.0 to >1.0)
 		if (bonus > 1.0f && prevBonus <= 1.0f) {
-			String msg = switch (data.getChosenPath()) {
-				case BLACK_FLAME -> "\u00A76The heat fuels your cycling.";
-				case CLOUD_HAMMER -> "\u00A7bThe high winds empower your cycling.";
-				default -> null;
-			};
-			if (msg != null) player.displayClientMessage(Component.literal(msg), true);
+			net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> biomeHolder =
+					player.level().getBiome(player.blockPosition());
+			VitalAura biomeAura = VitalAura.getAuraForBiome(biomeHolder);
+			player.displayClientMessage(Component.literal(
+					"\u00A7b" + biomeAura.getDisplayName() + " empowers your cycling."), true);
 		}
 		return bonus;
 	}
 
+	/**
+	 * Calculates the environmental cycling bonus based on biome aura alignment.
+	 * Foundation: no bonus (internal cycling only).
+	 * Black Flame: 1.5x in fire-aura biomes. Cloud Hammer: 1.5x in wind-aura biomes.
+	 * Sword paths and Hollow King: no aura bonus.
+	 */
 	private static float calculateEnvironmentalBonus(ServerPlayer player, CradlePlayerData data) {
-		return switch (data.getChosenPath()) {
-			case BLACK_FLAME -> isNearHeatSource(player) ? ENVIRONMENTAL_BONUS : 1.0f;
-			case CLOUD_HAMMER -> player.getY() >= 128 ? ENVIRONMENTAL_BONUS : 1.0f;
-			default -> 1.0f; // sword paths use sword cycling, Hollow King has no env bonus
-		};
-	}
-
-	/** Scans a 7×7×7 cube around the player for fire, lava, or magma blocks. */
-	private static boolean isNearHeatSource(ServerPlayer player) {
-		BlockPos pos = player.blockPosition();
-		for (int dx = -3; dx <= 3; dx++) {
-			for (int dy = -3; dy <= 3; dy++) {
-				for (int dz = -3; dz <= 3; dz++) {
-					BlockState state = player.level().getBlockState(pos.offset(dx, dy, dz));
-					if (state.is(Blocks.FIRE) || state.is(Blocks.SOUL_FIRE)
-							|| state.is(Blocks.LAVA) || state.is(Blocks.MAGMA_BLOCK)) {
-						return true;
-					}
-				}
-			}
+		// Foundation: internal cycling only — no environmental bonus
+		if (data.getAdvancementStage() == CradlePlayerData.AdvancementStage.FOUNDATION) {
+			return 1.0f;
 		}
-		return false;
+
+		// Get biome aura at player position
+		java.util.Set<VitalAura> alignedAuras = VitalAura.getAlignedAuras(data.getChosenPath());
+		if (alignedAuras.isEmpty()) {
+			return 1.0f; // Sword paths, Hollow King, UNSET — no aura bonus
+		}
+
+		net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> biomeHolder =
+				player.level().getBiome(player.blockPosition());
+		VitalAura biomeAura = VitalAura.getAuraForBiome(biomeHolder);
+
+		if (alignedAuras.contains(biomeAura)) {
+			return ENVIRONMENTAL_BONUS;
+		}
+		return 1.0f;
 	}
 
 	// ── Sword cycling helpers ─────────────────────────────────────────
@@ -883,6 +887,11 @@ public final class CyclingManager {
 			slotActive[i] = loadout.isSlotActive(i);
 		}
 		int flags = CradleSyncPayload.addSlotActiveFlags(baseFlags, slotActive);
+
+		// Add Copper Sight flag (bit 16)
+		if (data.isCopperSightActive()) {
+			flags |= CradleSyncPayload.FLAG_COPPER_SIGHT;
+		}
 
 		return new CradleSyncPayload(
 				data.getPlayerLevel(),

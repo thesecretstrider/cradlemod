@@ -68,7 +68,11 @@ public final class CyclingParticleRenderer {
 		double playerY = player.getY();
 		double playerZ = player.getZ();
 
-		boolean isHollowKing = "HOLLOW_KING".equals(ClientCradleData.path);
+		// Foundation and Hollow King both use internal cycling (outward particles)
+		// Foundation: hasn't learned to draw aura from environment yet
+		// Hollow King: pure madra path, naturally cycles internally
+		boolean isHollowKing = "HOLLOW_KING".equals(ClientCradleData.path)
+				|| "FOUNDATION".equals(ClientCradleData.stage);
 
 		for (int i = 0; i < particlesPerSpawn; i++) {
 			if (isHollowKing) {

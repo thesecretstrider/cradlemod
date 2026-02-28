@@ -8,6 +8,7 @@ import com.cradle.mod.network.UseEnforcerPayload;
 import com.cradle.mod.network.UseStrikerPayload;
 import com.cradle.mod.network.UseRulerPayload;
 import com.cradle.mod.network.ToggleCyclingPayload;
+import com.cradle.mod.network.ToggleCopperSightPayload;
 import com.cradle.mod.network.UseSagePayload;
 import com.cradle.mod.network.UseHeraldPayload;
 import com.cradle.mod.network.OpenIconSelectionPayload;
@@ -83,6 +84,16 @@ public class CradleModClient implements ClientModInitializer {
 					"key.cradlemod.skill_tree",
 					InputConstants.Type.KEYSYM,
 					GLFW.GLFW_KEY_K,
+					CRADLE_CATEGORY
+			)
+	);
+
+	// Keybind: press H to toggle Copper Sight (Copper+ only)
+	private static final KeyMapping COPPER_SIGHT_KEYBIND = KeyBindingHelper.registerKeyBinding(
+			new KeyMapping(
+					"key.cradlemod.copper_sight",
+					InputConstants.Type.KEYSYM,
+					GLFW.GLFW_KEY_H,
 					CRADLE_CATEGORY
 			)
 	);
@@ -267,6 +278,13 @@ public class CradleModClient implements ClientModInitializer {
 				client.setScreen(new SkillTreeScreen());
 			}
 
+			// H key: toggle Copper Sight (Copper+ only)
+			while (COPPER_SIGHT_KEYBIND.consumeClick()) {
+				if (ClientCradleData.isCopper()) {
+					ClientPlayNetworking.send(new ToggleCopperSightPayload());
+				}
+			}
+
 			while (CYCLING_KEYBIND.consumeClick()) {
 				ClientPlayNetworking.send(new ToggleCyclingPayload());
 			}
@@ -297,6 +315,7 @@ public class CradleModClient implements ClientModInitializer {
 			}
 
 			CyclingParticleRenderer.tick(client);
+			AuraParticleRenderer.tick(client);
 		});
 	}
 

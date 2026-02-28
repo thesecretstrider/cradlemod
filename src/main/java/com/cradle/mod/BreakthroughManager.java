@@ -401,6 +401,13 @@ public final class BreakthroughManager {
 				"\u00A76[Cradle] \u00A7fYour Madra has been purified. Your power grows denser..."
 		));
 
+		// Auto-enable Copper Sight when reaching Copper stage
+		if (nextStage == CradlePlayerData.AdvancementStage.COPPER) {
+			data.setCopperSightActive(true);
+			player.displayClientMessage(Component.literal(
+					"\u00A7bCopper Sight awakened! Press H to toggle. Vital aura is now visible."), true);
+		}
+
 		// Stage-specific lore narrative
 		String narrative = getBreakthroughNarrative(nextStage);
 		if (!narrative.isEmpty()) {
