@@ -16,7 +16,7 @@ import net.minecraft.network.chat.Component;
  * - Swapping abilities from the skill tree screen
  * - Picking abilities at stage gates (Foundation/Copper/Iron/Low Gold)
  *
- * Shows warning when swapping: "This will reset upgrade levels!"
+ * Mastery is remembered — swapping back to an ability restores its level.
  */
 public class AbilityPickerScreen extends Screen {
 
@@ -208,10 +208,10 @@ public class AbilityPickerScreen extends Screen {
 		String title = "\u00A76\u00A7lChoose Ability for Slot " + (targetSlot + 1);
 		graphics.drawCenteredString(this.font, title, centerX, 20, 0xFFFFFFFF);
 
-		// Warning text
+		// Info text
 		if (parentScreen != null && ClientLoadoutData.hasAbility(targetSlot)) {
-			graphics.drawCenteredString(this.font, "\u00A7c\u26A0 Swapping will reset upgrade levels!",
-					centerX, 32, 0xFFFF6666);
+			graphics.drawCenteredString(this.font, "\u00A7aMastery is remembered when swapping!",
+					centerX, 32, 0xFF55FF55);
 		}
 
 		// Calculate grid
@@ -344,15 +344,7 @@ public class AbilityPickerScreen extends Screen {
 					return true;
 				}
 
-				// If swapping and slot has an ability with levels, show warning
-				if (parentScreen != null && ClientLoadoutData.hasAbility(targetSlot)
-						&& ClientLoadoutData.getUpgradeLevel(targetSlot) > 1) {
-					showingWarning = true;
-					pendingAbilityId = selectedId;
-					return true;
-				}
-
-				// Direct swap (no warning needed — level 1)
+				// Direct swap — mastery is preserved so no warning needed
 				ClientPlayNetworking.send(new SwapAbilityPayload(targetSlot, selectedId));
 				if (parentScreen != null) {
 					minecraft.setScreen(parentScreen);

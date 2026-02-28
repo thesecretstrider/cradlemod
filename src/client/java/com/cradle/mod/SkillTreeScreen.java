@@ -10,43 +10,74 @@ import net.minecraft.network.chat.Component;
 
 /**
  * Skill Tree screen — opened via K key.
- * Displays 2 rows of 3 slot cards showing the player's ability loadout.
- * Each card shows ability name, type, level, upgrade button, swap button,
- * and branch indicator.
+ * Center-out radial layout with Basic Enforcement at the hub.
  *
  * Layout:
- *   [Slot 0: Z]  [Slot 1: X]  [Slot 2: C]
- *   [Slot 3: R]  [Slot 4: F]  [Slot 5: T]
+ *            [Slot 4]              [Slot 5]
+ *          (outer-UL)            (outer-UR)
+ *              \                    /
+ *               \                  /
+ *                [Slot 1: top]
+ *                      |
+ *               [Slot 0: CENTER]
+ *              /                  \
+ *     [Slot 2: lower-left]   [Slot 3: lower-right]
  */
 public class SkillTreeScreen extends Screen {
 
-	// Panel and card dimensions
-	private static final int CARD_WIDTH = 120;
-	private static final int CARD_HEIGHT = 90;
-	private static final int CARD_GAP = 10;
-	private static final int ROW_GAP = 10;
-	private static final int BUTTON_WIDTH = 50;
-	private static final int BUTTON_HEIGHT = 14;
+	// Node sizes per tier
+	private static final int CENTER_SIZE = 54;   // Slot 0 — hub
+	private static final int INNER_SIZE = 48;     // Slots 1-3
+	private static final int OUTER_SIZE = 44;     // Slots 4-5
+	private static final int BRANCH_SIZE = 36;    // Branch indicator nodes
 
-	private static final String[] KEY_LABELS = {"Z", "X", "C", "R", "F", "T"};
+	// Radial offsets from screen center (before scaling)
+	private static final int[][] SLOT_OFFSETS = {
+		{   0,    0 },   // 0: center
+		{   0,  -78 },   // 1: top (striker pick)
+		{ -68,   40 },   // 2: lower-left (iron pick)
+		{  68,   40 },   // 3: lower-right (low gold auto)
+		{ -98,  -98 },   // 4: outer upper-left (underlord+)
+		{  98,  -98 },   // 5: outer upper-right (archlord+)
+	};
+
+	// Branch nodes appear 1.6× further along same radial direction
+	private static final float BRANCH_OFFSET_MULT = 1.6f;
+
+	// Selection panel at bottom
+	private static final int PANEL_WIDTH = 280;
+	private static final int PANEL_HEIGHT = 56;
+	private static final int BTN_W = 56;
+	private static final int BTN_H = 16;
 
 	// Type colors
 	private static final int COLOR_ENFORCER = 0xFF22AA44;
 	private static final int COLOR_STRIKER = 0xFFCC3333;
 	private static final int COLOR_RULER = 0xFF3366CC;
 	private static final int COLOR_EMPTY = 0xFF444444;
-	private static final int COLOR_LOCKED = 0xFF222222;
+	private static final int COLOR_LOCKED = 0xFF1A1A1A;
 
-	// Button tracking
-	private final int[] upgradeBtnX = new int[6];
-	private final int[] upgradeBtnY = new int[6];
-	private final int[] swapBtnX = new int[6];
-	private final int[] swapBtnY = new int[6];
-	private final int[] branchBtnX = new int[6];
-	private final int[] branchBtnY = new int[6];
-	private final boolean[] upgradeHovered = new boolean[6];
-	private final boolean[] swapHovered = new boolean[6];
-	private final boolean[] branchHovered = new boolean[6];
+	// Selection / hover
+	private int selectedSlot = -1;
+	private int hoveredSlot = -1;
+	private int hoveredBranch = -1; // which slot's branch node is hovered
+
+	// Selection panel button hover states
+	private boolean upgradeHovered = false;
+	private boolean swapHovered = false;
+	private boolean branchPanelHovered = false;
+
+	// Computed positions (updated each frame based on scaling)
+	private final int[] nodeX = new int[6];
+	private final int[] nodeY = new int[6];
+	private final int[] nodeSize = new int[6];
+	private final int[] branchNodeX = new int[6];
+	private final int[] branchNodeY = new int[6];
+	private float scale = 1.0f;
+	private int treeCenterX, treeCenterY;
+	private int panelX, panelY; // selection panel position
+
+	private static final String[] KEY_LABELS = {"Z", "X", "C", "R", "F", "T"};
 
 	public SkillTreeScreen() {
 		super(Component.literal("Skill Tree"));
@@ -61,185 +92,461 @@ public class SkillTreeScreen extends Screen {
 	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		renderTransparentBackground(graphics);
 
-		int centerX = this.width / 2;
-		int totalWidth = 3 * CARD_WIDTH + 2 * CARD_GAP;
-		int totalHeight = 2 * CARD_HEIGHT + ROW_GAP;
-		int startX = centerX - totalWidth / 2;
-		int startY = this.height / 2 - totalHeight / 2 - 15;
+		// Scale only if the screen is truly too small to fit
+		float scaleX = (float) this.width / 300f;
+		float scaleY = (float) this.height / 340f;
+		scale = Math.min(1.0f, Math.min(scaleX, scaleY));
+		scale = Math.max(scale, 0.4f);
 
-		// Title
-		String title = "\u00A76\u00A7lSkill Tree";
-		graphics.drawCenteredString(this.font, title, centerX, startY - 18, 0xFFFFFFFF);
-
-		// Upgrade points display
-		String pointsStr = "\u00A7eUpgrade Points: \u00A7f" + ClientLoadoutData.upgradePoints;
-		graphics.drawCenteredString(this.font, pointsStr, centerX, startY - 8, 0xFFFFFFFF);
+		treeCenterX = this.width / 2;
+		// Push the tree center lower so the upper nodes use the top of the screen
+		// and the lower nodes + panel fill the bottom
+		treeCenterY = this.height / 2 + (int)(30 * scale);
 
 		int visibleSlots = getVisibleSlotCount();
 
+		// Compute node positions
 		for (int i = 0; i < 6; i++) {
-			int row = i / 3;
-			int col = i % 3;
-			int cardX = startX + col * (CARD_WIDTH + CARD_GAP);
-			int cardY = startY + 5 + row * (CARD_HEIGHT + ROW_GAP);
+			int ox = (int)(SLOT_OFFSETS[i][0] * scale);
+			int oy = (int)(SLOT_OFFSETS[i][1] * scale);
+			int size = i == 0 ? (int)(CENTER_SIZE * scale) :
+					   i <= 3 ? (int)(INNER_SIZE * scale) :
+					            (int)(OUTER_SIZE * scale);
+			size = Math.max(size, 24); // minimum size
+			nodeX[i] = treeCenterX + ox - size / 2;
+			nodeY[i] = treeCenterY + oy - size / 2;
+			nodeSize[i] = size;
 
-			boolean visible = i < visibleSlots;
-			boolean hasAbility = ClientLoadoutData.hasAbility(i);
-			String abilityId = ClientLoadoutData.getAbilityId(i);
-			int level = ClientLoadoutData.getUpgradeLevel(i);
-			boolean active = ClientLoadoutData.isSlotActive(i);
-
-			// Card background
-			int bgColor = !visible ? COLOR_LOCKED : (hasAbility ? 0xFF2A2A2A : COLOR_EMPTY);
-			graphics.fill(cardX, cardY, cardX + CARD_WIDTH, cardY + CARD_HEIGHT, 0xFF000000);
-			graphics.fill(cardX + 1, cardY + 1, cardX + CARD_WIDTH - 1, cardY + CARD_HEIGHT - 1, bgColor);
-
-			// Active indicator - colored left border
-			if (active) {
-				int typeColor = getTypeColor(abilityId);
-				graphics.fill(cardX, cardY, cardX + 3, cardY + CARD_HEIGHT, typeColor);
-			}
-
-			// Key label (top-left)
-			graphics.drawString(this.font, "\u00A77[" + KEY_LABELS[i] + "]", cardX + 4, cardY + 3, 0xFFAAAAAA, true);
-
-			if (!visible) {
-				// Locked slot
-				String lockMsg = getUnlockMessage(i);
-				graphics.drawCenteredString(this.font, "\u00A78" + lockMsg,
-						cardX + CARD_WIDTH / 2, cardY + CARD_HEIGHT / 2 - 4, 0xFF666666);
-				continue;
-			}
-
-			if (!hasAbility) {
-				// Empty slot
-				graphics.drawCenteredString(this.font, "\u00A78Empty",
-						cardX + CARD_WIDTH / 2, cardY + CARD_HEIGHT / 2 - 4, 0xFF888888);
-				continue;
-			}
-
-			// Ability name
-			String name = getAbilityDisplayName(abilityId);
-			int typeColor = getTypeColor(abilityId);
-			String typeName = getTypeName(abilityId);
-
-			// Type indicator
-			graphics.drawString(this.font, typeName, cardX + CARD_WIDTH - this.font.width(typeName) - 4,
-					cardY + 3, typeColor, true);
-
-			// Ability name (truncated if too long)
-			if (this.font.width(name) > CARD_WIDTH - 8) {
-				name = this.font.plainSubstrByWidth(name, CARD_WIDTH - 12) + "..";
-			}
-			graphics.drawString(this.font, name, cardX + 4, cardY + 14, 0xFFFFFFFF, true);
-
-			// Level display
-			String levelStr = "Lv. " + level;
-			graphics.drawString(this.font, levelStr, cardX + 4, cardY + 26, 0xFFCCCC00, true);
-
-			// Visual tier indicator
-			int tier = getVisualTier(level);
-			if (tier > 0) {
-				String stars = "\u2605".repeat(tier);
-				graphics.drawString(this.font, stars, cardX + 4 + this.font.width(levelStr) + 4,
-						cardY + 26, 0xFFFFAA00, true);
-			}
-
-			// Active status
-			if (active) {
-				graphics.drawString(this.font, "\u00A7aACTIVE", cardX + CARD_WIDTH - 34,
-						cardY + 14, 0xFF00FF00, true);
-			}
-
-			// Upgrade button
-			int ubX = cardX + 4;
-			int ubY = cardY + CARD_HEIGHT - BUTTON_HEIGHT - 4;
-			upgradeBtnX[i] = ubX;
-			upgradeBtnY[i] = ubY;
-			boolean canUpgrade = ClientLoadoutData.upgradePoints > 0 && level < 20;
-			upgradeHovered[i] = canUpgrade && mouseX >= ubX && mouseX <= ubX + BUTTON_WIDTH
-					&& mouseY >= ubY && mouseY <= ubY + BUTTON_HEIGHT;
-			int ubColor = canUpgrade ? (upgradeHovered[i] ? 0xFF44AA44 : 0xFF336633) : 0xFF333333;
-			graphics.fill(ubX, ubY, ubX + BUTTON_WIDTH, ubY + BUTTON_HEIGHT, ubColor);
-			graphics.drawCenteredString(this.font, canUpgrade ? "Upgrade" : "\u00A78Upgrade",
-					ubX + BUTTON_WIDTH / 2, ubY + 3, canUpgrade ? 0xFFFFFFFF : 0xFF666666);
-
-			// Swap button (next to upgrade)
-			int sbX = cardX + CARD_WIDTH - BUTTON_WIDTH - 4;
-			int sbY = ubY;
-			swapBtnX[i] = sbX;
-			swapBtnY[i] = sbY;
-			swapHovered[i] = mouseX >= sbX && mouseX <= sbX + BUTTON_WIDTH
-					&& mouseY >= sbY && mouseY <= sbY + BUTTON_HEIGHT;
-			int sbColor = swapHovered[i] ? 0xFF664444 : 0xFF443333;
-			graphics.fill(sbX, sbY, sbX + BUTTON_WIDTH, sbY + BUTTON_HEIGHT, sbColor);
-			graphics.drawCenteredString(this.font, "Swap",
-					sbX + BUTTON_WIDTH / 2, sbY + 3, 0xFFCCAAAA);
-
-			// Branch indicator (if upgrade level >= 10 and branch available)
-			if (level >= 10 && hasBranch(abilityId)) {
-				int emptySlot = ClientLoadoutData.getEquippedCount() < 6
-						? findFirstEmptySlot() : -1;
-				boolean canBranch = emptySlot >= 0;
-
-				int bbX = cardX + 4;
-				int bbY = ubY - BUTTON_HEIGHT - 3;
-				branchBtnX[i] = bbX;
-				branchBtnY[i] = bbY;
-				branchHovered[i] = canBranch && mouseX >= bbX && mouseX <= bbX + CARD_WIDTH - 8
-						&& mouseY >= bbY && mouseY <= bbY + BUTTON_HEIGHT;
-				int bbColor = canBranch ? (branchHovered[i] ? 0xFFAA44CC : 0xFF7733AA) : 0xFF333333;
-				graphics.fill(bbX, bbY, bbX + CARD_WIDTH - 8, bbY + BUTTON_HEIGHT, bbColor);
-
-				// Pulsing "Branch!" text
-				long time = System.currentTimeMillis();
-				float pulse = (float) (0.7 + 0.3 * Math.sin(time / 300.0));
-				int alpha = (int) (255 * pulse);
-				int branchTextColor = canBranch ? ((alpha << 24) | 0x00FFDDFF) : 0xFF666666;
-				graphics.drawCenteredString(this.font,
-						canBranch ? "\u2728 Branch Available!" : "\u00A78No empty slot",
-						bbX + (CARD_WIDTH - 8) / 2, bbY + 3, branchTextColor);
+			// Branch node positions
+			if (i > 0) {
+				int bx = (int)(SLOT_OFFSETS[i][0] * BRANCH_OFFSET_MULT * scale);
+				int by = (int)(SLOT_OFFSETS[i][1] * BRANCH_OFFSET_MULT * scale);
+				int bSize = (int)(BRANCH_SIZE * scale);
+				bSize = Math.max(bSize, 20);
+				branchNodeX[i] = treeCenterX + bx - bSize / 2;
+				branchNodeY[i] = treeCenterY + by - bSize / 2;
 			}
 		}
 
-		super.render(graphics, mouseX, mouseY, partialTick);
-	}
-
-	@Override
-	public boolean mouseClicked(MouseButtonEvent event, boolean bl) {
-		if (event.button() == 0) {
-			for (int i = 0; i < 6; i++) {
-				if (!ClientLoadoutData.hasAbility(i)) continue;
-
-				// Upgrade
-				if (upgradeHovered[i] && ClientLoadoutData.upgradePoints > 0
-						&& ClientLoadoutData.getUpgradeLevel(i) < 20) {
-					ClientPlayNetworking.send(new UpgradeAbilityPayload(i));
-					return true;
-				}
-
-				// Swap
-				if (swapHovered[i]) {
-					minecraft.setScreen(new AbilityPickerScreen(i, this));
-					return true;
-				}
-
-				// Branch
-				if (branchHovered[i]) {
-					int emptySlot = findFirstEmptySlot();
-					if (emptySlot >= 0) {
-						ClientPlayNetworking.send(new BranchAbilityPayload(i, emptySlot));
-						return true;
+		// Determine hover state
+		hoveredSlot = -1;
+		hoveredBranch = -1;
+		for (int i = 0; i < 6; i++) {
+			if (i >= visibleSlots) continue;
+			if (isInsideNode(mouseX, mouseY, nodeX[i], nodeY[i], nodeSize[i])) {
+				hoveredSlot = i;
+			}
+			// Check branch node hover
+			if (i > 0 && ClientLoadoutData.hasAbility(i)) {
+				String aid = ClientLoadoutData.getAbilityId(i);
+				int lvl = ClientLoadoutData.getUpgradeLevel(i);
+				if (lvl >= 10 && hasBranch(aid)) {
+					int bSize = (int)(BRANCH_SIZE * scale);
+					bSize = Math.max(bSize, 20);
+					if (isInsideNode(mouseX, mouseY, branchNodeX[i], branchNodeY[i], bSize)) {
+						hoveredBranch = i;
 					}
 				}
 			}
 		}
+
+		// ── 1. Title + upgrade points ──
+		String title = "\u00A76\u00A7lSkill Tree";
+		graphics.drawCenteredString(this.font, title, treeCenterX, 6, 0xFFFFFFFF);
+		String pointsStr = "\u00A7eUpgrade Points: \u00A7f" + ClientLoadoutData.upgradePoints;
+		graphics.drawCenteredString(this.font, pointsStr, treeCenterX, 18, 0xFFFFFFFF);
+
+		// ── 2. Connection lines (center → each inner/outer slot) ──
+		for (int i = 1; i < 6; i++) {
+			boolean slotVisible = i < visibleSlots;
+			int lineColor = slotVisible ? 0xFF555555 : 0xFF2A2A2A;
+
+			int fromCX = treeCenterX;
+			int fromCY = treeCenterY;
+			int toCX = treeCenterX + (int)(SLOT_OFFSETS[i][0] * scale);
+			int toCY = treeCenterY + (int)(SLOT_OFFSETS[i][1] * scale);
+
+			// For outer slots 4 and 5, connect through slot 1 (the top node)
+			if (i == 4 || i == 5) {
+				int midCX = treeCenterX + (int)(SLOT_OFFSETS[1][0] * scale);
+				int midCY = treeCenterY + (int)(SLOT_OFFSETS[1][1] * scale);
+				drawDottedLine(graphics, fromCX, fromCY, midCX, midCY, lineColor);
+				drawDottedLine(graphics, midCX, midCY, toCX, toCY, lineColor);
+			} else {
+				drawDottedLine(graphics, fromCX, fromCY, toCX, toCY, lineColor);
+			}
+		}
+
+		// ── 3. Branch connector lines ──
+		for (int i = 1; i < 6; i++) {
+			if (i >= visibleSlots || !ClientLoadoutData.hasAbility(i)) continue;
+			String aid = ClientLoadoutData.getAbilityId(i);
+			int lvl = ClientLoadoutData.getUpgradeLevel(i);
+			if (lvl >= 10 && hasBranch(aid)) {
+				int nodeCX = treeCenterX + (int)(SLOT_OFFSETS[i][0] * scale);
+				int nodeCY = treeCenterY + (int)(SLOT_OFFSETS[i][1] * scale);
+				int bSize = (int)(BRANCH_SIZE * scale);
+				bSize = Math.max(bSize, 20);
+				int branchCX = branchNodeX[i] + bSize / 2;
+				int branchCY = branchNodeY[i] + bSize / 2;
+				drawDottedLine(graphics, nodeCX, nodeCY, branchCX, branchCY, 0xFF7733AA);
+			}
+		}
+
+		// ── 4. Render all nodes ──
+		for (int i = 0; i < 6; i++) {
+			boolean visible = i < visibleSlots;
+			renderNode(graphics, i, visible, mouseX, mouseY);
+		}
+
+		// ── 5. Branch indicator nodes ──
+		for (int i = 1; i < 6; i++) {
+			if (i >= visibleSlots || !ClientLoadoutData.hasAbility(i)) continue;
+			String aid = ClientLoadoutData.getAbilityId(i);
+			int lvl = ClientLoadoutData.getUpgradeLevel(i);
+			if (lvl >= 10 && hasBranch(aid)) {
+				renderBranchNode(graphics, i);
+			}
+		}
+
+		// ── 6. Selection panel at bottom ──
+		if (selectedSlot >= 0 && selectedSlot < visibleSlots && ClientLoadoutData.hasAbility(selectedSlot)) {
+			renderSelectionPanel(graphics, mouseX, mouseY);
+		}
+
+		// ── 7. Hint text ──
+		String hint = selectedSlot >= 0 ? "\u00A77Click background to deselect" : "\u00A77Click a node to select it";
+		graphics.drawCenteredString(this.font, hint, treeCenterX, this.height - 12, 0xFF888888);
+
+		super.render(graphics, mouseX, mouseY, partialTick);
+	}
+
+	// ── Node rendering ───────────────────────────────────────────────
+
+	private void renderNode(GuiGraphics graphics, int slot, boolean visible, int mouseX, int mouseY) {
+		int x = nodeX[slot];
+		int y = nodeY[slot];
+		int size = nodeSize[slot];
+
+		boolean hasAbility = ClientLoadoutData.hasAbility(slot);
+		String abilityId = ClientLoadoutData.getAbilityId(slot);
+		boolean isActive = ClientLoadoutData.isSlotActive(slot);
+		int level = ClientLoadoutData.getUpgradeLevel(slot);
+		boolean isHovered = hoveredSlot == slot;
+		boolean isSelected = selectedSlot == slot;
+
+		// Border
+		int borderColor;
+		if (isSelected) {
+			borderColor = 0xFFFFDD00; // bright yellow
+		} else if (isHovered && visible) {
+			borderColor = 0xFFAAAAAA; // light grey
+		} else {
+			borderColor = 0xFF333333; // dark
+		}
+		// Draw border (2px for selected, 1px for others)
+		int borderW = isSelected ? 2 : 1;
+		graphics.fill(x - borderW, y - borderW, x + size + borderW, y + size + borderW, borderColor);
+
+		if (!visible) {
+			// Locked node
+			graphics.fill(x, y, x + size, y + size, COLOR_LOCKED);
+			// Lock message centered
+			String lockMsg = getUnlockMessage(slot);
+			int textWidth = this.font.width(lockMsg);
+			if (textWidth > size - 4) {
+				// Too wide — abbreviate
+				lockMsg = "Lv " + switch (slot) {
+					case 1 -> "Cu";
+					case 2 -> "Fe";
+					case 3 -> "Au";
+					case 4 -> "UL";
+					case 5 -> "AL";
+					default -> "?";
+				};
+			}
+			graphics.drawCenteredString(this.font, "\u00A78" + lockMsg,
+					x + size / 2, y + size / 2 - 4, 0xFF555555);
+			return;
+		}
+
+		if (!hasAbility) {
+			// Empty unlocked node
+			graphics.fill(x, y, x + size, y + size, COLOR_EMPTY);
+			graphics.drawCenteredString(this.font, "\u00A78Empty",
+					x + size / 2, y + size / 2 - 4, 0xFF888888);
+			// Key label
+			graphics.drawString(this.font, "\u00A77" + KEY_LABELS[slot],
+					x + 2, y + 2, 0xFFAAAAAA, true);
+			return;
+		}
+
+		// Filled node
+		int typeColor = getTypeColor(abilityId);
+		graphics.fill(x, y, x + size, y + size, 0xFF1A1A1A);
+
+		// Type-colored strip at top (3px tall)
+		graphics.fill(x, y, x + size, y + 3, typeColor);
+
+		// Active glow effect on border
+		if (isActive) {
+			long time = System.currentTimeMillis();
+			float pulse = (float)(0.6 + 0.4 * Math.sin(time / 200.0));
+			int alpha = (int)(200 * pulse);
+			int glowColor = (alpha << 24) | (0x00FFDD00);
+			graphics.fill(x - borderW, y - borderW, x + size + borderW, y + 1, glowColor);
+			graphics.fill(x - borderW, y + size - 1, x + size + borderW, y + size + borderW, glowColor);
+			graphics.fill(x - borderW, y, x + 1, y + size, glowColor);
+			graphics.fill(x + size - 1, y, x + size + borderW, y + size, glowColor);
+		}
+
+		// Type tag at top center (below strip)
+		String typeName = getTypeName(abilityId);
+		graphics.drawCenteredString(this.font, typeName,
+				x + size / 2, y + 5, typeColor);
+
+		// Ability name centered
+		String name = getAbilityDisplayName(abilityId);
+		// Truncate if too wide
+		if (this.font.width(name) > size - 4) {
+			name = this.font.plainSubstrByWidth(name, size - 8) + "..";
+		}
+		graphics.drawCenteredString(this.font, name,
+				x + size / 2, y + size / 2 - 6, 0xFFFFFFFF);
+
+		// Level + stars below name
+		int tier = getVisualTier(level);
+		String lvlStr = "Lv." + level;
+		if (tier > 0) {
+			lvlStr += " " + "\u2605".repeat(tier);
+		}
+		int lvlColor = tier >= 3 ? 0xFFFFAA00 : tier >= 2 ? 0xFFCCCC00 : tier >= 1 ? 0xFFAAAA44 : 0xFF888888;
+		graphics.drawCenteredString(this.font, lvlStr,
+				x + size / 2, y + size / 2 + 4, lvlColor);
+
+		// "ON" indicator if active
+		if (isActive) {
+			graphics.drawString(this.font, "\u00A7aON",
+					x + size - 16, y + size - 10, 0xFF00FF00, true);
+		}
+
+		// Key label (bottom-left)
+		graphics.drawString(this.font, "\u00A77" + KEY_LABELS[slot],
+				x + 2, y + size - 10, 0xFFAAAAAA, true);
+	}
+
+	private void renderBranchNode(GuiGraphics graphics, int slot) {
+		int bSize = (int)(BRANCH_SIZE * scale);
+		bSize = Math.max(bSize, 20);
+		int x = branchNodeX[slot];
+		int y = branchNodeY[slot];
+
+		boolean isHovered = hoveredBranch == slot;
+		int emptySlot = findFirstEmptySlot();
+		boolean canBranch = emptySlot >= 0;
+
+		// Pulsing border
+		long time = System.currentTimeMillis();
+		float pulse = (float)(0.5 + 0.5 * Math.sin(time / 250.0));
+		int alpha = (int)(180 + 75 * pulse);
+		int borderColor = canBranch
+				? ((alpha << 24) | 0x00AA44CC)
+				: 0xFF333333;
+
+		if (isHovered && canBranch) {
+			borderColor = 0xFFDD88FF;
+		}
+
+		graphics.fill(x - 1, y - 1, x + bSize + 1, y + bSize + 1, borderColor);
+		graphics.fill(x, y, x + bSize, y + bSize, canBranch ? 0xFF2A1A33 : 0xFF1A1A1A);
+
+		// "B" or branch icon
+		String label = canBranch ? "\u2728" : "\u00A78B";
+		graphics.drawCenteredString(this.font, label,
+				x + bSize / 2, y + bSize / 2 - 4, canBranch ? 0xFFDD88FF : 0xFF555555);
+	}
+
+	// ── Selection panel ──────────────────────────────────────────────
+
+	private void renderSelectionPanel(GuiGraphics graphics, int mouseX, int mouseY) {
+		panelX = treeCenterX - PANEL_WIDTH / 2;
+		panelY = this.height - PANEL_HEIGHT - 18;
+
+		// Panel background
+		graphics.fill(panelX - 1, panelY - 1, panelX + PANEL_WIDTH + 1, panelY + PANEL_HEIGHT + 1, 0xFF555555);
+		graphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + PANEL_HEIGHT, 0xDD111111);
+
+		String abilityId = ClientLoadoutData.getAbilityId(selectedSlot);
+		int level = ClientLoadoutData.getUpgradeLevel(selectedSlot);
+		boolean isActive = ClientLoadoutData.isSlotActive(selectedSlot);
+		String name = getAbilityDisplayName(abilityId);
+		String typeName = getTypeName(abilityId);
+		int typeColor = getTypeColor(abilityId);
+		int tier = getVisualTier(level);
+
+		// Left side: ability info
+		int infoX = panelX + 8;
+		int infoY = panelY + 6;
+
+		// Name + type
+		graphics.drawString(this.font, name, infoX, infoY, 0xFFFFFFFF, true);
+		graphics.drawString(this.font, " [" + typeName + "]",
+				infoX + this.font.width(name), infoY, typeColor, true);
+
+		// Level + stars + active
+		String lvlStr = "Lv." + level;
+		if (tier > 0) {
+			lvlStr += " " + "\u2605".repeat(tier);
+		}
+		if (isActive) {
+			lvlStr += " \u00A7aACTIVE";
+		}
+		graphics.drawString(this.font, lvlStr, infoX, infoY + 12, 0xFFCCCC00, true);
+
+		// Key label
+		graphics.drawString(this.font, "\u00A77Key: [" + KEY_LABELS[selectedSlot] + "]",
+				infoX, infoY + 24, 0xFFAAAAAA, true);
+
+		// Right side: buttons
+		int btnAreaX = panelX + PANEL_WIDTH - 8;
+		int btnY1 = panelY + 6;
+		int btnY2 = panelY + 6 + BTN_H + 4;
+
+		// Upgrade button (top-right)
+		boolean canUpgrade = ClientLoadoutData.upgradePoints > 0 && level < 20;
+		int ubX = btnAreaX - BTN_W;
+		upgradeHovered = canUpgrade && mouseX >= ubX && mouseX <= ubX + BTN_W
+				&& mouseY >= btnY1 && mouseY <= btnY1 + BTN_H;
+		int ubColor = canUpgrade ? (upgradeHovered ? 0xFF44CC44 : 0xFF336633) : 0xFF333333;
+		graphics.fill(ubX, btnY1, ubX + BTN_W, btnY1 + BTN_H, ubColor);
+		graphics.drawCenteredString(this.font,
+				canUpgrade ? "Upgrade" : "\u00A78Upgrade",
+				ubX + BTN_W / 2, btnY1 + 4, canUpgrade ? 0xFFFFFFFF : 0xFF666666);
+
+		// Swap button (next to upgrade)
+		int sbX = ubX - BTN_W - 4;
+		swapHovered = mouseX >= sbX && mouseX <= sbX + BTN_W
+				&& mouseY >= btnY1 && mouseY <= btnY1 + BTN_H;
+		int sbColor = swapHovered ? 0xFF884444 : 0xFF553333;
+		graphics.fill(sbX, btnY1, sbX + BTN_W, btnY1 + BTN_H, sbColor);
+		graphics.drawCenteredString(this.font, "Swap",
+				sbX + BTN_W / 2, btnY1 + 4, 0xFFCCAAAA);
+
+		// Branch button (below, only if level >= 10 and has branch)
+		if (level >= 10 && hasBranch(abilityId)) {
+			int emptySlot = findFirstEmptySlot();
+			boolean canBranch = emptySlot >= 0;
+			int bbX = btnAreaX - BTN_W;
+			branchPanelHovered = canBranch && mouseX >= bbX && mouseX <= bbX + BTN_W
+					&& mouseY >= btnY2 && mouseY <= btnY2 + BTN_H;
+			int bbColor = canBranch ? (branchPanelHovered ? 0xFFAA44CC : 0xFF7733AA) : 0xFF333333;
+			graphics.fill(bbX, btnY2, bbX + BTN_W, btnY2 + BTN_H, bbColor);
+
+			long time = System.currentTimeMillis();
+			float pulse = (float)(0.7 + 0.3 * Math.sin(time / 300.0));
+			int alpha = (int)(255 * pulse);
+			int textColor = canBranch ? ((alpha << 24) | 0x00FFDDFF) : 0xFF666666;
+			graphics.drawCenteredString(this.font,
+					canBranch ? "Branch!" : "\u00A78Full",
+					bbX + BTN_W / 2, btnY2 + 4, textColor);
+		}
+	}
+
+	// ── Line drawing ─────────────────────────────────────────────────
+
+	/**
+	 * Draw a dotted/segmented line between two points using 2px fills.
+	 * Fits Minecraft's pixel aesthetic.
+	 */
+	private void drawDottedLine(GuiGraphics graphics, int x1, int y1, int x2, int y2, int color) {
+		float dx = x2 - x1;
+		float dy = y2 - y1;
+		float length = (float) Math.sqrt(dx * dx + dy * dy);
+		if (length < 1) return;
+
+		float stepSize = 4f; // dot every 4 pixels
+		int steps = (int)(length / stepSize);
+		if (steps < 1) steps = 1;
+
+		for (int i = 0; i <= steps; i++) {
+			float t = (float) i / steps;
+			int px = (int)(x1 + dx * t);
+			int py = (int)(y1 + dy * t);
+			graphics.fill(px - 1, py - 1, px + 1, py + 1, color);
+		}
+	}
+
+	// ── Click handling ───────────────────────────────────────────────
+
+	@Override
+	public boolean mouseClicked(MouseButtonEvent event, boolean bl) {
+		if (event.button() == 0) {
+			int visibleSlots = getVisibleSlotCount();
+
+			// Check selection panel buttons first (if panel is visible)
+			if (selectedSlot >= 0 && selectedSlot < visibleSlots && ClientLoadoutData.hasAbility(selectedSlot)) {
+				// Upgrade
+				if (upgradeHovered && ClientLoadoutData.upgradePoints > 0
+						&& ClientLoadoutData.getUpgradeLevel(selectedSlot) < 20) {
+					ClientPlayNetworking.send(new UpgradeAbilityPayload(selectedSlot));
+					return true;
+				}
+
+				// Swap
+				if (swapHovered) {
+					minecraft.setScreen(new AbilityPickerScreen(selectedSlot, this));
+					return true;
+				}
+
+				// Branch (from panel button)
+				if (branchPanelHovered) {
+					int emptySlot = findFirstEmptySlot();
+					if (emptySlot >= 0) {
+						ClientPlayNetworking.send(new BranchAbilityPayload(selectedSlot, emptySlot));
+						return true;
+					}
+				}
+			}
+
+			// Check branch node clicks
+			if (hoveredBranch >= 0) {
+				int emptySlot = findFirstEmptySlot();
+				if (emptySlot >= 0) {
+					ClientPlayNetworking.send(new BranchAbilityPayload(hoveredBranch, emptySlot));
+					return true;
+				}
+			}
+
+			// Check node clicks (select/deselect)
+			if (hoveredSlot >= 0 && hoveredSlot < visibleSlots) {
+				// Empty slot — open ability picker directly
+				if (!ClientLoadoutData.hasAbility(hoveredSlot)) {
+					minecraft.setScreen(new AbilityPickerScreen(hoveredSlot, this));
+					return true;
+				}
+				if (selectedSlot == hoveredSlot) {
+					selectedSlot = -1; // deselect
+				} else {
+					selectedSlot = hoveredSlot; // select
+				}
+				return true;
+			}
+
+			// Clicked background — deselect
+			selectedSlot = -1;
+		}
 		return super.mouseClicked(event, bl);
 	}
 
-	// ── Helpers ───────────────────────────────────────────────────────
+	// ── Utility ──────────────────────────────────────────────────────
 
-	private static int getVisibleSlotCount() {
+	private boolean isInsideNode(int mx, int my, int nx, int ny, int size) {
+		return mx >= nx && mx <= nx + size && my >= ny && my <= ny + size;
+	}
+
+	// ── Helpers (public/static — used by other classes) ──────────────
+
+	static int getVisibleSlotCount() {
 		String stage = ClientCradleData.stage;
 		return switch (stage) {
 			case "FOUNDATION" -> 1;
@@ -251,7 +558,7 @@ public class SkillTreeScreen extends Screen {
 		};
 	}
 
-	private static String getUnlockMessage(int slot) {
+	static String getUnlockMessage(int slot) {
 		return switch (slot) {
 			case 1 -> "Unlocks at Copper";
 			case 2 -> "Unlocks at Iron";
@@ -361,7 +668,7 @@ public class SkillTreeScreen extends Screen {
 		return "???";
 	}
 
-	private static int getVisualTier(int level) {
+	static int getVisualTier(int level) {
 		if (level >= 15) return 3;
 		if (level >= 10) return 2;
 		if (level >= 5) return 1;
@@ -369,7 +676,7 @@ public class SkillTreeScreen extends Screen {
 	}
 
 	// IDs of abilities that are themselves branches (they don't branch further)
-	private static final java.util.Set<String> BRANCH_ABILITY_IDS = java.util.Set.of(
+	static final java.util.Set<String> BRANCH_ABILITY_IDS = java.util.Set.of(
 		"blackflame_inferno_form", "blackflame_meteor", "blackflame_scorched_earth",
 		"endless_thousand_cuts", "endless_sword_storm", "endless_blade_barrier",
 		"stellar_lightspeed", "stellar_nova", "stellar_constellation",
@@ -377,7 +684,7 @@ public class SkillTreeScreen extends Screen {
 		"hollow_void_body", "hollow_nullify", "hollow_suppression_field"
 	);
 
-	private static boolean hasBranch(String id) {
+	static boolean hasBranch(String id) {
 		// Branch abilities are defined at level 10 for all 15 base path abilities.
 		// Branch abilities themselves, basic enforcement, and universals don't branch further.
 		if (id == null) return false;
@@ -387,7 +694,7 @@ public class SkillTreeScreen extends Screen {
 		return true; // All 15 base path abilities have branches
 	}
 
-	private static int findFirstEmptySlot() {
+	static int findFirstEmptySlot() {
 		for (int i = 0; i < 6; i++) {
 			if (!ClientLoadoutData.hasAbility(i)) return i;
 		}

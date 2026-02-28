@@ -19,9 +19,9 @@ import net.minecraft.network.chat.Component;
  */
 public class CradleInfoScreen extends Screen {
 
-	// Panel dimensions
-	private static final int PANEL_WIDTH = 220;
-	private static final int PANEL_HEIGHT = 302;
+	// Panel dimensions (base, before scaling)
+	private static final int BASE_PANEL_WIDTH = 220;
+	private static final int BASE_PANEL_HEIGHT = 302;
 
 	// Bar dimensions (for XP and Madra bars inside the panel)
 	private static final int BAR_WIDTH = 180;
@@ -62,60 +62,82 @@ public class CradleInfoScreen extends Screen {
 
 		int centerX = this.width / 2;
 		int centerY = this.height / 2;
-		int panelLeft = centerX - PANEL_WIDTH / 2;
-		int panelTop = centerY - PANEL_HEIGHT / 2;
+
+		// Scale panel to fit screen with some margin
+		int panelWidth = BASE_PANEL_WIDTH;
+		int panelHeight = BASE_PANEL_HEIGHT;
+		if (panelWidth > this.width - 10) {
+			panelWidth = this.width - 10;
+		}
+		if (panelHeight > this.height - 10) {
+			panelHeight = this.height - 10;
+		}
+
+		int panelLeft = centerX - panelWidth / 2;
+		int panelTop = centerY - panelHeight / 2;
 
 		int stageColor = ClientCradleData.getStageColor();
 
-		// Draw panel background (dark semi-transparent box)
-		graphics.fill(panelLeft - 2, panelTop - 2, panelLeft + PANEL_WIDTH + 2, panelTop + PANEL_HEIGHT + 2, stageColor);
-		graphics.fill(panelLeft, panelTop, panelLeft + PANEL_WIDTH, panelTop + PANEL_HEIGHT, 0xDD1A1A2E);
+		// Bar widths scale with panel
+		int barWidth = panelWidth - 40;
 
-		int y = panelTop + 10;
+		// Draw panel background (dark semi-transparent box)
+		graphics.fill(panelLeft - 2, panelTop - 2, panelLeft + panelWidth + 2, panelTop + panelHeight + 2, stageColor);
+		graphics.fill(panelLeft, panelTop, panelLeft + panelWidth, panelTop + panelHeight, 0xDD1A1A2E);
+
+		// Compute line spacing — shrink if panel is tight
+		int lineH = panelHeight >= BASE_PANEL_HEIGHT ? 14 : Math.max(10, (panelHeight - 90) / 16);
+		int barH = panelHeight >= BASE_PANEL_HEIGHT ? BAR_HEIGHT : Math.max(4, BAR_HEIGHT - 2);
+
+		int y = panelTop + 6;
 
 		// Title
 		graphics.drawCenteredString(this.font, "Sacred Artist Status", centerX, y, 0xFFFFD700);
-		y += 16;
+		y += lineH + 2;
 
 		// Divider line
-		graphics.fill(panelLeft + 10, y, panelLeft + PANEL_WIDTH - 10, y + 1, 0x66FFFFFF);
-		y += 8;
+		graphics.fill(panelLeft + 10, y, panelLeft + panelWidth - 10, y + 1, 0x66FFFFFF);
+		y += lineH / 2;
+
+		// Value column offset (scales with panel width)
+		int valCol = panelLeft + Math.min(60, panelWidth / 4);
+		int valColWide = panelLeft + Math.min(80, panelWidth / 3);
 
 		// Path
 		graphics.drawString(this.font, "Path:", panelLeft + 10, y, 0xFFAAAAAA);
-		graphics.drawString(this.font, ClientCradleData.getPathDisplayName(), panelLeft + 60, y, stageColor);
-		y += 14;
+		graphics.drawString(this.font, ClientCradleData.getPathDisplayName(), valCol, y, stageColor);
+		y += lineH;
 
 		// Stage
 		graphics.drawString(this.font, "Stage:", panelLeft + 10, y, 0xFFAAAAAA);
-		graphics.drawString(this.font, ClientCradleData.getStageDisplayName(), panelLeft + 60, y, stageColor);
-		y += 14;
+		graphics.drawString(this.font, ClientCradleData.getStageDisplayName(), valCol, y, stageColor);
+		y += lineH;
 
 		// Level
 		graphics.drawString(this.font, "Level:", panelLeft + 10, y, 0xFFAAAAAA);
-		graphics.drawString(this.font, String.valueOf(ClientCradleData.level), panelLeft + 60, y, 0xFFFFFFFF);
-		y += 14;
+		graphics.drawString(this.font, String.valueOf(ClientCradleData.level), valCol, y, 0xFFFFFFFF);
+		y += lineH;
 
 		// Next breakthrough
 		int nextBreakthrough = ClientCradleData.getNextBreakthroughLevel();
 		graphics.drawString(this.font, "Next:", panelLeft + 10, y, 0xFFAAAAAA);
 		if (nextBreakthrough == -2) {
-			graphics.drawString(this.font, "Choose: Sage or Herald", panelLeft + 60, y, 0xFFDD99FF);
+			graphics.drawString(this.font, "Choose: Sage or Herald", valCol, y, 0xFFDD99FF);
 		} else if (nextBreakthrough > 0) {
-			graphics.drawString(this.font, "Level " + nextBreakthrough, panelLeft + 60, y, 0xFFDD99FF);
+			graphics.drawString(this.font, "Level " + nextBreakthrough, valCol, y, 0xFFDD99FF);
 		} else {
-			graphics.drawString(this.font, "Max stage reached", panelLeft + 60, y, 0xFFFFD700);
+			graphics.drawString(this.font, "Max stage reached", valCol, y, 0xFFFFD700);
 		}
-		y += 14;
+		y += lineH;
 
 		// Cycling status
 		graphics.drawString(this.font, "Cycling:", panelLeft + 10, y, 0xFFAAAAAA);
 		if (ClientCradleData.cycling) {
-			graphics.drawString(this.font, "Active", panelLeft + 70, y, 0xFF55FF55);
+			graphics.drawString(this.font, "Active", valCol + 10, y, 0xFF55FF55);
 		} else {
-			graphics.drawString(this.font, "Inactive", panelLeft + 70, y, 0xFF999999);
+			graphics.drawString(this.font, "Inactive", valCol + 10, y, 0xFF999999);
 		}
-		y += 14;
+		y += lineH;
 
 		// Iron Body
 		graphics.drawString(this.font, "Iron Body:", panelLeft + 10, y, 0xFFAAAAAA);
@@ -124,26 +146,26 @@ public class CradleInfoScreen extends Screen {
 			if (ClientCradleData.ironBodyActive) {
 				bodyText += " (ON)";
 			}
-			graphics.drawString(this.font, bodyText, panelLeft + 80, y, ClientCradleData.getIronBodyColor());
+			graphics.drawString(this.font, bodyText, valColWide, y, ClientCradleData.getIronBodyColor());
 		} else {
-			graphics.drawString(this.font, "None", panelLeft + 80, y, 0xFF999999);
+			graphics.drawString(this.font, "None", valColWide, y, 0xFF999999);
 		}
-		y += 14;
+		y += lineH;
 
 		// Willpower (Archlord+ only)
 		if (ClientCradleData.hasWillpower()) {
 			graphics.drawString(this.font, "Willpower:", panelLeft + 10, y, 0xFFAAAAAA);
 			String wpText = String.format("%.0f / %.0f", ClientCradleData.currentWillpower, ClientCradleData.maxWillpower);
-			graphics.drawString(this.font, wpText, panelLeft + 80, y, 0xFF6699FF);
-			y += 14;
+			graphics.drawString(this.font, wpText, valColWide, y, 0xFF6699FF);
+			y += lineH;
 		}
 
 		// Icon (Sage+ only)
 		if (ClientCradleData.hasIcon()) {
 			graphics.drawString(this.font, "Icon:", panelLeft + 10, y, 0xFFAAAAAA);
 			graphics.drawString(this.font, ClientCradleData.getIconDisplayName(),
-					panelLeft + 80, y, ClientCradleData.getIconColor());
-			y += 14;
+					valColWide, y, ClientCradleData.getIconColor());
+			y += lineH;
 		}
 
 		// Enforcer technique
@@ -151,67 +173,67 @@ public class CradleInfoScreen extends Screen {
 		if (!"UNSET".equals(ClientCradleData.path)) {
 			String enforcerName = ClientCradleData.getEnforcerTechniqueName();
 			if (ClientCradleData.enforcerActive) {
-				graphics.drawString(this.font, enforcerName + " (ON)", panelLeft + 75, y, 0xFF55FF55);
+				graphics.drawString(this.font, enforcerName + " (ON)", valCol + 15, y, 0xFF55FF55);
 			} else {
-				graphics.drawString(this.font, enforcerName, panelLeft + 75, y, 0xFF999999);
+				graphics.drawString(this.font, enforcerName, valCol + 15, y, 0xFF999999);
 			}
 		} else {
-			graphics.drawString(this.font, "None", panelLeft + 75, y, 0xFF999999);
+			graphics.drawString(this.font, "None", valCol + 15, y, 0xFF999999);
 		}
-		y += 14;
+		y += lineH;
 
 		// Ruler technique
 		graphics.drawString(this.font, "Ruler:", panelLeft + 10, y, 0xFFAAAAAA);
 		if (!"UNSET".equals(ClientCradleData.path)) {
 			String rulerName = ClientCradleData.getRulerTechniqueName();
 			if (ClientCradleData.rulerActive) {
-				graphics.drawString(this.font, rulerName + " (ON)", panelLeft + 75, y, 0xFF55FF55);
+				graphics.drawString(this.font, rulerName + " (ON)", valCol + 15, y, 0xFF55FF55);
 			} else {
-				graphics.drawString(this.font, rulerName, panelLeft + 75, y, 0xFF999999);
+				graphics.drawString(this.font, rulerName, valCol + 15, y, 0xFF999999);
 			}
 		} else {
-			graphics.drawString(this.font, "None", panelLeft + 75, y, 0xFF999999);
+			graphics.drawString(this.font, "None", valCol + 15, y, 0xFF999999);
 		}
-		y += 18;
+		y += lineH + 4;
 
 		// Cycling XP bar
-		int barLeft = centerX - BAR_WIDTH / 2;
+		int barLeft = centerX - barWidth / 2;
 		graphics.drawString(this.font, "Cycling XP:", panelLeft + 10, y, 0xFFAAAAAA);
 		String xpText = ClientCradleData.cyclingXp + " / " + ClientCradleData.xpToNext;
 		int xpTextWidth = this.font.width(xpText);
-		graphics.drawString(this.font, xpText, panelLeft + PANEL_WIDTH - 10 - xpTextWidth, y, 0xFFFFFFFF);
-		y += 12;
+		graphics.drawString(this.font, xpText, panelLeft + panelWidth - 10 - xpTextWidth, y, 0xFFFFFFFF);
+		y += lineH - 2;
 
 		// XP bar background
-		graphics.fill(barLeft, y, barLeft + BAR_WIDTH, y + BAR_HEIGHT, 0xFF333333);
+		graphics.fill(barLeft, y, barLeft + barWidth, y + barH, 0xFF333333);
 		// XP bar fill (white/light)
 		float xpRatio = ClientCradleData.xpToNext > 0
 				? (float) ClientCradleData.cyclingXp / ClientCradleData.xpToNext
 				: 0f;
-		int xpFillWidth = (int) (BAR_WIDTH * Math.min(1f, xpRatio));
+		int xpFillWidth = (int) (barWidth * Math.min(1f, xpRatio));
 		if (xpFillWidth > 0) {
-			graphics.fill(barLeft, y, barLeft + xpFillWidth, y + BAR_HEIGHT, 0xFF55FFFF);
+			graphics.fill(barLeft, y, barLeft + xpFillWidth, y + barH, 0xFF55FFFF);
 		}
-		y += BAR_HEIGHT + 10;
+		y += barH + lineH / 2 + 2;
 
 		// Madra bar
 		graphics.drawString(this.font, "Madra:", panelLeft + 10, y, 0xFFAAAAAA);
 		String madraText = String.format("%.0f / %.0f", ClientCradleData.currentMadra, ClientCradleData.maxMadra);
 		int madraTextWidth = this.font.width(madraText);
-		graphics.drawString(this.font, madraText, panelLeft + PANEL_WIDTH - 10 - madraTextWidth, y, 0xFFFFFFFF);
-		y += 12;
+		graphics.drawString(this.font, madraText, panelLeft + panelWidth - 10 - madraTextWidth, y, 0xFFFFFFFF);
+		y += lineH - 2;
 
 		// Madra bar background
-		graphics.fill(barLeft, y, barLeft + BAR_WIDTH, y + BAR_HEIGHT, 0xFF333333);
+		graphics.fill(barLeft, y, barLeft + barWidth, y + barH, 0xFF333333);
 		// Madra bar fill (colored by stage)
 		float madraRatio = ClientCradleData.maxMadra > 0
 				? ClientCradleData.currentMadra / ClientCradleData.maxMadra
 				: 0f;
-		int madraFillWidth = (int) (BAR_WIDTH * Math.min(1f, madraRatio));
+		int madraFillWidth = (int) (barWidth * Math.min(1f, madraRatio));
 		if (madraFillWidth > 0) {
-			graphics.fill(barLeft, y, barLeft + madraFillWidth, y + BAR_HEIGHT, stageColor);
+			graphics.fill(barLeft, y, barLeft + madraFillWidth, y + barH, stageColor);
 		}
-		y += BAR_HEIGHT + 10;
+		y += barH + lineH / 2 + 2;
 
 		// ── Sage/Herald choice or Advance button ──────────────────────
 		showingChoice = false;
@@ -282,7 +304,7 @@ public class CradleInfoScreen extends Screen {
 			int stBtnW = 100;
 			int stBtnH = 16;
 			skillTreeBtnX = centerX - stBtnW / 2;
-			skillTreeBtnY = panelTop + PANEL_HEIGHT - 32;
+			skillTreeBtnY = panelTop + panelHeight - 32;
 			skillTreeBtnHovered = mouseX >= skillTreeBtnX && mouseX <= skillTreeBtnX + stBtnW
 					&& mouseY >= skillTreeBtnY && mouseY <= skillTreeBtnY + stBtnH;
 			int stColor = skillTreeBtnHovered ? 0xFF444466 : 0xFF333355;
@@ -297,7 +319,7 @@ public class CradleInfoScreen extends Screen {
 
 		// Hint at the bottom
 		graphics.drawCenteredString(this.font, "Press ESC to close | J to toggle",
-				centerX, panelTop + PANEL_HEIGHT - 12, 0x66FFFFFF);
+				centerX, panelTop + panelHeight - 12, 0x66FFFFFF);
 	}
 
 	// ── Click handling ────────────────────────────────────────────────

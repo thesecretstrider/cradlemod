@@ -4,9 +4,14 @@ import com.cradle.mod.CradleMod;
 import com.cradle.mod.CradlePlayerData;
 import net.minecraft.nbt.CompoundTag;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Tracks a player's equipped abilities, upgrade levels, and upgrade points.
  * 6 ability slots (0-5), each can hold one ability ID with an upgrade level.
+ * Mastery map remembers levels for previously equipped abilities so they
+ * aren't lost when swapping.
  */
 public final class PlayerLoadout {
 
@@ -16,6 +21,9 @@ public final class PlayerLoadout {
 	private final int[] upgradeLevels = new int[MAX_SLOTS];
 	private final boolean[] slotActive = new boolean[MAX_SLOTS]; // Transient — not saved (enforcer/ruler toggle state)
 	private int upgradePoints;
+
+	/** Remembers the highest level reached for each ability ID, even when unequipped. */
+	private final Map<String, Integer> masteryMap = new HashMap<>();
 
 	public PlayerLoadout() {
 		for (int i = 0; i < MAX_SLOTS; i++) {
@@ -54,33 +62,63 @@ public final class PlayerLoadout {
 	}
 
 	/**
-	 * Equip an ability to a slot. Resets the upgrade level to 1.
+	 * Equip an ability to a slot. Saves the old ability's level to mastery,
+	 * then restores the new ability's mastery level (or defaults to 1).
 	 */
 	public void equipAbility(int slot, String abilityId) {
 		if (slot < 0 || slot >= MAX_SLOTS) return;
+		saveMastery(slot);
 		equippedAbilities[slot] = abilityId;
-		upgradeLevels[slot] = 1;
+		upgradeLevels[slot] = masteryMap.getOrDefault(abilityId, 1);
 		slotActive[slot] = false;
 	}
 
 	/**
 	 * Set ability with a specific level (for migration/debug).
+	 * Also updates the mastery map.
 	 */
 	public void equipAbility(int slot, String abilityId, int level) {
 		if (slot < 0 || slot >= MAX_SLOTS) return;
+		saveMastery(slot);
+		int lvl = Math.max(1, level);
 		equippedAbilities[slot] = abilityId;
-		upgradeLevels[slot] = Math.max(1, level);
+		upgradeLevels[slot] = lvl;
+		masteryMap.put(abilityId, lvl);
 		slotActive[slot] = false;
 	}
 
 	/**
-	 * Clear a slot (remove ability).
+	 * Clear a slot (remove ability). Saves mastery first.
 	 */
 	public void clearSlot(int slot) {
 		if (slot < 0 || slot >= MAX_SLOTS) return;
+		saveMastery(slot);
 		equippedAbilities[slot] = null;
 		upgradeLevels[slot] = 0;
 		slotActive[slot] = false;
+	}
+
+	/**
+	 * Save the current ability's level in a slot to the mastery map
+	 * (keeps the highest level reached).
+	 */
+	private void saveMastery(int slot) {
+		String oldAbility = equippedAbilities[slot];
+		int oldLevel = upgradeLevels[slot];
+		if (oldAbility != null && oldLevel > 0) {
+			int existing = masteryMap.getOrDefault(oldAbility, 0);
+			if (oldLevel > existing) {
+				masteryMap.put(oldAbility, oldLevel);
+			}
+		}
+	}
+
+	/**
+	 * Get the remembered mastery level for an ability, or 0 if never used.
+	 */
+	public int getMasteryLevel(String abilityId) {
+		if (abilityId == null) return 0;
+		return masteryMap.getOrDefault(abilityId, 0);
 	}
 
 	/**
@@ -153,6 +191,8 @@ public final class PlayerLoadout {
 
 		upgradeLevels[slot]++;
 		upgradePoints--;
+		// Keep mastery map in sync
+		masteryMap.put(equippedAbilities[slot], upgradeLevels[slot]);
 		return true;
 	}
 
@@ -175,11 +215,13 @@ public final class PlayerLoadout {
 		AbilityDefinition branchDef = AbilityRegistry.get(branchId);
 		if (branchDef == null) return false;
 
-		// Reset source to level 1, place branch in target
+		// Save source mastery before resetting, then reset source to level 1
+		saveMastery(sourceSlot);
 		upgradeLevels[sourceSlot] = 1;
+		masteryMap.put(equippedAbilities[sourceSlot], 1); // branching intentionally resets mastery
 		slotActive[sourceSlot] = false;
 		equippedAbilities[targetSlot] = branchId;
-		upgradeLevels[targetSlot] = 1;
+		upgradeLevels[targetSlot] = masteryMap.getOrDefault(branchId, 1);
 		slotActive[targetSlot] = false;
 
 		return true;
@@ -196,6 +238,16 @@ public final class PlayerLoadout {
 			}
 		}
 		tag.putInt("upgradePoints", upgradePoints);
+
+		// Save mastery map
+		if (!masteryMap.isEmpty()) {
+			CompoundTag masteryTag = new CompoundTag();
+			for (Map.Entry<String, Integer> entry : masteryMap.entrySet()) {
+				masteryTag.putInt(entry.getKey(), entry.getValue());
+			}
+			tag.put("mastery", masteryTag);
+		}
+
 		return tag;
 	}
 
@@ -212,6 +264,27 @@ public final class PlayerLoadout {
 			}
 		}
 		loadout.upgradePoints = tag.getIntOr("upgradePoints", 0);
+
+		// Load mastery map
+		if (tag.contains("mastery")) {
+			tag.getCompound("mastery").ifPresent(masteryTag -> {
+				for (String key : masteryTag.keySet()) {
+					loadout.masteryMap.put(key, masteryTag.getIntOr(key, 1));
+				}
+			});
+		}
+
+		// Ensure currently equipped abilities are also in the mastery map
+		for (int i = 0; i < MAX_SLOTS; i++) {
+			if (loadout.equippedAbilities[i] != null && loadout.upgradeLevels[i] > 0) {
+				String id = loadout.equippedAbilities[i];
+				int existing = loadout.masteryMap.getOrDefault(id, 0);
+				if (loadout.upgradeLevels[i] > existing) {
+					loadout.masteryMap.put(id, loadout.upgradeLevels[i]);
+				}
+			}
+		}
+
 		return loadout;
 	}
 

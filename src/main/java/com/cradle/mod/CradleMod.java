@@ -478,8 +478,12 @@ public class CradleMod implements ModInitializer {
 			}
 
 			loadout.equipAbility(payload.slot(), payload.newAbilityId());
+			int restoredLevel = loadout.getUpgradeLevel(payload.slot());
+			String lvlMsg = restoredLevel > 1
+					? " (mastery restored: Lv." + restoredLevel + ")"
+					: "";
 			player.displayClientMessage(Component.literal(
-					"\u00A7eSwapped to " + def.getDisplayName() + " (level reset to 1)"), true);
+					"\u00A7eSwapped to " + def.getDisplayName() + lvlMsg), true);
 			autoSave(player.level().getServer());
 			sync(player, data);
 			syncLoadout(player, data);
