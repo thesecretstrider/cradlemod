@@ -13,40 +13,46 @@ import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * Client-side ambient particle renderer for Copper Sight.
- * When active, spawns colored aura lines rising from the ground near the player,
- * like veins of vital aura energy flowing upward through the earth.
+ * When active, renders two types of aura particles:
+ *
+ * 1. BIOME AURA RIPPLES — lines of particles at ground level that radiate
+ *    outward from the player, colored by the biome's dominant aura type.
+ *    Like ripples of energy spreading along the ground.
+ *
+ * 2. SOURCE AURA EMISSIONS — specific blocks (fire, water, flowers, etc.)
+ *    emit their matching aura type. Fire emits FIRE aura, water emits WATER
+ *    aura, etc. These rise from the source block itself.
  *
  * Only renders when:
  * 1. The player is at Copper stage or higher
  * 2. Copper Sight is toggled on (H key)
  *
  * Particles are purely cosmetic — no server interaction.
- * Biome aura type is cached and rechecked every 20 ticks (1 second)
- * to avoid unnecessary biome lookups.
  */
 public final class AuraParticleRenderer {
 
 	private static final Random RANDOM = new Random();
 
-	// How far from the player aura lines spawn (in blocks)
-	private static final double SPAWN_RADIUS = 14.0;
-	// Number of new aura lines to start per tick
-	private static final int LINES_PER_TICK = 2;
-	// Number of particles stacked vertically per line
-	private static final int PARTICLES_PER_LINE = 5;
-	// Vertical spacing between particles in a line (blocks)
-	private static final double LINE_SPACING = 0.6;
-	// Size of aura particles (smaller = more wispy/line-like)
-	private static final float PARTICLE_SCALE = 0.45f;
-	// Biome cache update interval (ticks)
+	// ── Biome aura ripple settings ──
+	private static final int RIPPLE_LINES_PER_TICK = 2;
+	private static final int RIPPLE_PARTICLES_PER_LINE = 6;
+	private static final double RIPPLE_MAX_DISTANCE = 14.0;
+	private static final float RIPPLE_PARTICLE_SCALE = 0.4f;
+
+	// ── Source aura emission settings ──
+	private static final int SOURCE_SCAN_RADIUS = 10;
+	private static final int SOURCE_SCANS_PER_TICK = 3;
+	private static final int SOURCE_PARTICLES = 3;
+	private static final float SOURCE_PARTICLE_SCALE = 0.55f;
+
+	// ── General settings ──
 	private static final int BIOME_CHECK_INTERVAL = 20;
-	// Max distance below player to search for ground
 	private static final int GROUND_SEARCH_DEPTH = 8;
 
 	// Cached state
-	private static int cachedAuraColor = 0xFFA0825A; // default Earth (brown)
+	private static int cachedAuraColor = 0xFFA0825A;
 	private static String cachedAuraName = "Earth Aura";
-	private static String cachedBiomeName = ""; // actual biome name for info screen
+	private static String cachedBiomeName = "";
 	private static int tickCounter = 0;
 
 	public static void tick(Minecraft client) {
@@ -57,7 +63,6 @@ public final class AuraParticleRenderer {
 			return;
 		}
 
-		// Only render when Copper Sight is active
 		if (!ClientCradleData.copperSightActive) {
 			tickCounter = 0;
 			return;
@@ -80,46 +85,97 @@ public final class AuraParticleRenderer {
 		double py = player.getY();
 		double pz = player.getZ();
 
-		for (int line = 0; line < LINES_PER_TICK; line++) {
-			// Pick a random XZ position around the player
-			double dx = (RANDOM.nextDouble() - 0.5) * 2.0 * SPAWN_RADIUS;
-			double dz = (RANDOM.nextDouble() - 0.5) * 2.0 * SPAWN_RADIUS;
+		// ── 1. Biome aura ripples radiating outward from the player ──
+		spawnBiomeRipples(level, px, py, pz);
 
-			double spawnX = px + dx;
-			double spawnZ = pz + dz;
+		// ── 2. Source aura emissions from nearby blocks ──
+		spawnSourceEmissions(level, px, py, pz);
+	}
 
-			// Find the ground level at this position
-			double groundY = findGroundLevel(level, spawnX, py, spawnZ);
+	/**
+	 * Spawns lines of particles at ground level radiating outward from the player.
+	 * Each line is a trail of particles along the ground in a random direction.
+	 */
+	private static void spawnBiomeRipples(Level level, double px, double py, double pz) {
+		for (int line = 0; line < RIPPLE_LINES_PER_TICK; line++) {
+			// Pick a random direction angle from the player
+			double angle = RANDOM.nextDouble() * Math.PI * 2.0;
+			double dirX = Math.cos(angle);
+			double dirZ = Math.sin(angle);
 
-			// Slight random offset so lines don't always start at exact block tops
-			double baseY = groundY + RANDOM.nextDouble() * 0.3;
+			// Brightness variation per line
+			float brightness = 0.85f + RANDOM.nextFloat() * 0.3f;
+			int lineColor = varyBrightness(cachedAuraColor, brightness);
+			float scale = RIPPLE_PARTICLE_SCALE + (RANDOM.nextFloat() - 0.5f) * 0.1f;
+			DustParticleOptions options = new DustParticleOptions(lineColor, Math.max(0.2f, scale));
 
-			// Slightly vary color brightness per line for visual variety
-			float brightnessVariance = 0.85f + RANDOM.nextFloat() * 0.3f;
-			int lineColor = varyBrightness(cachedAuraColor, brightnessVariance);
+			// Spawn particles along the line, starting near the player and going outward
+			for (int i = 0; i < RIPPLE_PARTICLES_PER_LINE; i++) {
+				// Distance from player increases with each particle
+				double dist = 1.5 + (RIPPLE_MAX_DISTANCE - 1.5) * ((double) i / RIPPLE_PARTICLES_PER_LINE);
+				// Add some spread so lines aren't perfectly straight
+				double spread = (RANDOM.nextDouble() - 0.5) * 0.4;
 
-			// Slightly vary particle scale per line
-			float lineScale = PARTICLE_SCALE + (RANDOM.nextFloat() - 0.5f) * 0.15f;
-			DustParticleOptions options = new DustParticleOptions(lineColor, Math.max(0.2f, lineScale));
+				double spawnX = px + dirX * dist + (-dirZ) * spread;
+				double spawnZ = pz + dirZ * dist + dirX * spread;
 
-			// Spawn a vertical column of particles rising from the ground
-			for (int i = 0; i < PARTICLES_PER_LINE; i++) {
-				double particleY = baseY + i * LINE_SPACING;
+				// Find ground level at this point
+				double groundY = findGroundLevel(level, spawnX, py, spawnZ);
+				double spawnY = groundY + 0.05 + RANDOM.nextDouble() * 0.15;
 
-				// Small horizontal jitter to make the line look organic, not perfectly straight
-				double jitterX = (RANDOM.nextDouble() - 0.5) * 0.15;
-				double jitterZ = (RANDOM.nextDouble() - 0.5) * 0.15;
+				// Velocity: outward along the ground + slight upward drift
+				double speed = 0.015 + RANDOM.nextDouble() * 0.01;
+				double vx = dirX * speed;
+				double vz = dirZ * speed;
+				double vy = 0.002 + RANDOM.nextDouble() * 0.005;
 
-				// Strong upward velocity — particles streak upward
-				// Lower particles move faster, upper ones drift (creates a tapering effect)
-				double vy = 0.03 + (PARTICLES_PER_LINE - i) * 0.008;
-				// Minimal horizontal drift
-				double vx = (RANDOM.nextDouble() - 0.5) * 0.003;
-				double vz = (RANDOM.nextDouble() - 0.5) * 0.003;
+				level.addParticle(options, spawnX, spawnY, spawnZ, vx, vy, vz);
+			}
+		}
+	}
 
-				level.addParticle(options,
-						spawnX + jitterX, particleY, spawnZ + jitterZ,
-						vx, vy, vz);
+	/**
+	 * Scans random nearby blocks for aura sources and spawns colored particles
+	 * rising from them. Fire blocks emit FIRE aura, water emits WATER, etc.
+	 */
+	private static void spawnSourceEmissions(Level level, double px, double py, double pz) {
+		int playerBX = (int) Math.floor(px);
+		int playerBY = (int) Math.floor(py);
+		int playerBZ = (int) Math.floor(pz);
+
+		for (int scan = 0; scan < SOURCE_SCANS_PER_TICK; scan++) {
+			// Pick a random block within scan radius
+			int dx = RANDOM.nextInt(SOURCE_SCAN_RADIUS * 2 + 1) - SOURCE_SCAN_RADIUS;
+			int dy = RANDOM.nextInt(7) - 3; // check +-3 vertically
+			int dz = RANDOM.nextInt(SOURCE_SCAN_RADIUS * 2 + 1) - SOURCE_SCAN_RADIUS;
+
+			BlockPos pos = new BlockPos(playerBX + dx, playerBY + dy, playerBZ + dz);
+			BlockState state = level.getBlockState(pos);
+
+			VitalAura sourceAura = VitalAura.getAuraForBlock(state);
+			if (sourceAura == null) continue;
+
+			// Found an aura source! Spawn particles rising from it
+			int color = sourceAura.getColor();
+			float brightness = 0.9f + RANDOM.nextFloat() * 0.2f;
+			int sourceColor = varyBrightness(color, brightness);
+			DustParticleOptions options = new DustParticleOptions(sourceColor, SOURCE_PARTICLE_SCALE);
+
+			double blockX = pos.getX() + 0.5;
+			double blockY = pos.getY() + 0.8;
+			double blockZ = pos.getZ() + 0.5;
+
+			for (int i = 0; i < SOURCE_PARTICLES; i++) {
+				double sx = blockX + (RANDOM.nextDouble() - 0.5) * 0.6;
+				double sy = blockY + i * 0.4 + RANDOM.nextDouble() * 0.2;
+				double sz = blockZ + (RANDOM.nextDouble() - 0.5) * 0.6;
+
+				// Rise upward with slight wander
+				double vx = (RANDOM.nextDouble() - 0.5) * 0.005;
+				double vy = 0.02 + RANDOM.nextDouble() * 0.015;
+				double vz = (RANDOM.nextDouble() - 0.5) * 0.005;
+
+				level.addParticle(options, sx, sy, sz, vx, vy, vz);
 			}
 		}
 	}
@@ -131,20 +187,18 @@ public final class AuraParticleRenderer {
 	private static double findGroundLevel(Level level, double x, double playerY, double z) {
 		int bx = (int) Math.floor(x);
 		int bz = (int) Math.floor(z);
-		int startY = (int) Math.floor(playerY) + 2; // Start slightly above player
+		int startY = (int) Math.floor(playerY) + 2;
 
 		for (int dy = 0; dy <= GROUND_SEARCH_DEPTH + 4; dy++) {
 			int checkY = startY - dy;
 			BlockPos pos = new BlockPos(bx, checkY, bz);
 			BlockState state = level.getBlockState(pos);
 
-			// Found a solid block — return the top of it
 			if (state.blocksMotion()) {
 				return checkY + 1.0;
 			}
 		}
 
-		// No ground found — default to player Y minus a few blocks
 		return playerY - 2.0;
 	}
 
@@ -159,24 +213,17 @@ public final class AuraParticleRenderer {
 		return (a << 24) | (r << 16) | (g << 8) | b;
 	}
 
-	/**
-	 * Returns the cached aura display name for the current biome.
-	 * Used by the info screen to show what aura type the player is in.
-	 */
+	/** Returns the cached aura display name for the current biome. */
 	public static String getCachedAuraName() {
 		return cachedAuraName;
 	}
 
-	/**
-	 * Returns the cached aura color for HUD rendering.
-	 */
+	/** Returns the cached aura color for HUD rendering. */
 	public static int getCachedAuraColor() {
 		return cachedAuraColor;
 	}
 
-	/**
-	 * Returns the actual biome name (e.g., "desert", "plains") for debug display.
-	 */
+	/** Returns the actual biome name for debug display. */
 	public static String getCachedBiomeName() {
 		return cachedBiomeName;
 	}
