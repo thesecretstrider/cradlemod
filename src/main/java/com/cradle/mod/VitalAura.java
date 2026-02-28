@@ -21,7 +21,7 @@ import java.util.Set;
 public enum VitalAura {
 
 	FIRE(0xFFFF6600, "Fire Aura"),
-	EARTH(0xFFA0825A, "Earth Aura"),
+	EARTH(0xFF7A5C3A, "Earth Aura"),
 	WIND(0xFFCCCCDD, "Wind Aura"),
 	WATER(0xFF3399FF, "Water Aura"),
 	FORCE(0xFF9933FF, "Force Aura"),
@@ -111,12 +111,14 @@ public enum VitalAura {
 		BIOME_AURA.put(Biomes.DEEP_DARK, FORCE);
 
 		// BLOOD biomes — dense organic life, predatory ecosystems
-		BIOME_AURA.put(Biomes.JUNGLE, BLOOD);
-		BIOME_AURA.put(Biomes.SPARSE_JUNGLE, BLOOD);
-		BIOME_AURA.put(Biomes.BAMBOO_JUNGLE, BLOOD);
 		BIOME_AURA.put(Biomes.MUSHROOM_FIELDS, BLOOD);
 		BIOME_AURA.put(Biomes.MANGROVE_SWAMP, BLOOD);
 		BIOME_AURA.put(Biomes.DARK_FOREST, BLOOD);
+
+		// Jungles — earthy, primal (darker brown aura)
+		BIOME_AURA.put(Biomes.JUNGLE, EARTH);
+		BIOME_AURA.put(Biomes.SPARSE_JUNGLE, EARTH);
+		BIOME_AURA.put(Biomes.BAMBOO_JUNGLE, EARTH);
 
 		// LIFE biomes — lush, fertile, flowering, nurturing
 		BIOME_AURA.put(Biomes.FLOWER_FOREST, LIFE);
