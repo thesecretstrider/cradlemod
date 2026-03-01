@@ -5,8 +5,7 @@
 	"mixins": [
 		"CradleMixin",
 		"DreadbeastWolfMixin",
-		"DreadbeastCowMixin",
-		"DreadbeastSheepMixin"
+		"DreadbeastCowMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

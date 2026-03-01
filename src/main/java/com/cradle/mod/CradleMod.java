@@ -1045,7 +1045,8 @@ public class CradleMod implements ModInitializer {
 		// Dreadbeast animals (all modified by mixins to be hostile)
 		if (entity instanceof net.minecraft.world.entity.animal.wolf.Wolf wolf && !wolf.isTame()) return true;
 		if (entity instanceof net.minecraft.world.entity.animal.cow.Cow) return true;
-		if (entity instanceof net.minecraft.world.entity.animal.sheep.Sheep) return true;
+		// Sheep disabled until all texture layers (wool, undercoat) are complete
+		// if (entity instanceof net.minecraft.world.entity.animal.sheep.Sheep) return true;
 		return false;
 	}
 
