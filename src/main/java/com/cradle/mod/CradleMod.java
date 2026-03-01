@@ -10,9 +10,6 @@ import com.cradle.mod.network.CradleSyncPayload;
 import com.cradle.mod.network.OpenInfoScreenPayload;
 import com.cradle.mod.network.OpenPathSelectionPayload;
 import com.cradle.mod.network.ToggleIronBodyPayload;
-import com.cradle.mod.network.UseEnforcerPayload;
-import com.cradle.mod.network.UseStrikerPayload;
-import com.cradle.mod.network.UseRulerPayload;
 import com.cradle.mod.network.ToggleCyclingPayload;
 import com.cradle.mod.network.ChooseSageHeraldPayload;
 import com.cradle.mod.network.UseSagePayload;
@@ -34,7 +31,6 @@ import com.cradle.mod.ability.AbilityDefinition;
 import com.cradle.mod.ability.AbilityRegistry;
 import com.cradle.mod.ability.PlayerLoadout;
 import com.cradle.mod.entity.CradleEntities;
-import com.cradle.mod.entity.StrikerProjectileEntity;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerEntityCombatEvents;
@@ -53,10 +49,8 @@ import net.minecraft.nbt.NbtIo;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -83,8 +77,6 @@ public class CradleMod implements ModInitializer {
 
 	private static final String DATA_FILE_NAME = "cradlemod_playerdata.dat";
 	private static final long BLOODFORGED_COOLDOWN_MS = 30_000;
-	private static final long STRIKER_COOLDOWN_MS = 2_000;
-	private static final float STRIKER_MADRA_COST = 15.0f;
 	private static final long SAGE_STOP_COOLDOWN_MS = 12_000;   // 12 seconds base
 	private static final long SAGE_KILL_COOLDOWN_MS = 20_000;   // 20 seconds base
 	private static final float SAGE_STOP_WILLPOWER_COST = 25.0f;
@@ -92,7 +84,6 @@ public class CradleMod implements ModInitializer {
 	private static final int AUTO_SAVE_INTERVAL_TICKS = 600; // 30 seconds
 
 	private static final Map<UUID, Long> bloodforgedCooldowns = new HashMap<>();
-	private static final Map<UUID, Long> strikerCooldowns = new HashMap<>();
 	private static final Map<String, Long> sageAbilityCooldowns = new HashMap<>();
 	private static int ticksSinceLastSave = 0;
 
@@ -127,9 +118,6 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(ChoosePathPayload.TYPE, ChoosePathPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(AttemptAdvancePayload.TYPE, AttemptAdvancePayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(ToggleIronBodyPayload.TYPE, ToggleIronBodyPayload.STREAM_CODEC);
-		PayloadTypeRegistry.playC2S().register(UseEnforcerPayload.TYPE, UseEnforcerPayload.STREAM_CODEC);
-		PayloadTypeRegistry.playC2S().register(UseStrikerPayload.TYPE, UseStrikerPayload.STREAM_CODEC);
-		PayloadTypeRegistry.playC2S().register(UseRulerPayload.TYPE, UseRulerPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(ToggleCyclingPayload.TYPE, ToggleCyclingPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(ChooseSageHeraldPayload.TYPE, ChooseSageHeraldPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(UseSagePayload.TYPE, UseSagePayload.STREAM_CODEC);
@@ -345,107 +333,7 @@ public class CradleMod implements ModInitializer {
 			sync(player, data);
 		});
 
-		// Handle Enforcer technique (Z key toggle). Requires Copper+.
-		ServerPlayNetworking.registerGlobalReceiver(UseEnforcerPayload.TYPE, (payload, context) -> {
-			ServerPlayer player = context.player();
-			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
-
-			if (requiresPath(player, data)) return;
-			if (requiresStage(player, data, CradlePlayerData.AdvancementStage.COPPER, "Enforcer")) return;
-
-			if (data.isEnforcerActive()) {
-				CyclingManager.deactivateEnforcer(player, data);
-				player.sendSystemMessage(Component.literal("\u00A76[Cradle] \u00A77Enforcer technique deactivated."));
-			} else {
-				if (data.getCurrentMadra() <= 0) {
-					player.displayClientMessage(Component.literal("\u00A7cNot enough Madra!"), true);
-					return;
-				}
-				disruptCyclingIfNeeded(player, data);
-				CyclingManager.activateEnforcer(player, data);
-
-				String name = getEnforcerName(data.getChosenPath());
-				player.sendSystemMessage(Component.literal("\u00A76[Cradle] \u00A7a" + name + " activated!"));
-			}
-			sync(player, data);
-		});
-
-		// Handle Striker technique (X key). Available at Foundation. Costs Madra + has cooldown.
-		ServerPlayNetworking.registerGlobalReceiver(UseStrikerPayload.TYPE, (payload, context) -> {
-			ServerPlayer player = context.player();
-			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
-
-			if (requiresPath(player, data)) return;
-
-			// Cooldown check (scaled by advancement stage)
-			long now = System.currentTimeMillis();
-			Long lastUse = strikerCooldowns.get(player.getUUID());
-			long effectiveCooldown = (long) (STRIKER_COOLDOWN_MS * data.getCooldownMultiplier());
-			if (lastUse != null && now - lastUse < effectiveCooldown) {
-				long remainingMs = effectiveCooldown - (now - lastUse);
-				double remainingSec = Math.ceil(remainingMs / 100.0) / 10.0;
-				player.displayClientMessage(Component.literal(
-						"\u00A7cStriker on cooldown! \u00A7e" + String.format("%.1f", remainingSec) + "s \u00A7cremaining."
-				), true);
-				return;
-			}
-
-			// Madra cost (graduated discount by stage)
-			float cost = STRIKER_MADRA_COST * data.getMadraCostMultiplier();
-			if (data.getCurrentMadra() < cost) {
-				player.displayClientMessage(Component.literal(
-						"\u00A7cNot enough Madra! Need \u00A7e" + String.format("%.0f", cost) + "\u00A7c."
-				), true);
-				return;
-			}
-
-			disruptCyclingIfNeeded(player, data);
-
-			// Deduct Madra, set cooldown, fire projectile
-			data.setCurrentMadra(data.getCurrentMadra() - cost);
-			strikerCooldowns.put(player.getUUID(), now);
-
-			ServerLevel serverLevel = (ServerLevel) player.level();
-			Vec3 look = player.getLookAngle();
-			StrikerProjectileEntity projectile = new StrikerProjectileEntity(
-					serverLevel, player, look, data.getChosenPath(), data.getAbilityPowerMultiplier());
-			projectile.setPos(
-					player.getX() + look.x * 0.5,
-					player.getEyeY() - 0.1,
-					player.getZ() + look.z * 0.5);
-			Projectile.spawnProjectileUsingShoot(
-					projectile, serverLevel, ItemStack.EMPTY,
-					look.x, look.y, look.z, 1.5f, 0.0f);
-
-			sync(player, data);
-		});
-
-		// Handle Ruler technique (C key toggle). Requires Copper+.
-		ServerPlayNetworking.registerGlobalReceiver(UseRulerPayload.TYPE, (payload, context) -> {
-			ServerPlayer player = context.player();
-			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
-
-			if (requiresPath(player, data)) return;
-			if (requiresStage(player, data, CradlePlayerData.AdvancementStage.COPPER, "Ruler")) return;
-
-			if (data.isRulerActive()) {
-				data.setRulerActive(false);
-				player.sendSystemMessage(Component.literal("\u00A76[Cradle] \u00A77Ruler technique deactivated."));
-			} else {
-				if (data.getCurrentMadra() <= 0) {
-					player.displayClientMessage(Component.literal("\u00A7cNot enough Madra!"), true);
-					return;
-				}
-				disruptCyclingIfNeeded(player, data);
-				data.setRulerActive(true);
-
-				String name = getRulerName(data.getChosenPath());
-				player.sendSystemMessage(Component.literal("\u00A76[Cradle] \u00A7a" + name + " activated!"));
-			}
-			sync(player, data);
-		});
-
-		// Handle skill-tree ability use (any slot). New system delegates to AbilityExecutor.
+		// Handle skill-tree ability use (any slot). Delegates to AbilityExecutor.
 		ServerPlayNetworking.registerGlobalReceiver(UseAbilityPayload.TYPE, (payload, context) -> {
 			ServerPlayer player = context.player();
 			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
@@ -1012,30 +900,6 @@ public class CradleMod implements ModInitializer {
 			CycleCommand.register(dispatcher);
 			DuelCommand.register(dispatcher);
 		});
-	}
-
-	// ── Technique name lookups ────────────────────────────────────────
-
-	private static String getEnforcerName(CradlePlayerData.Path path) {
-		return switch (path) {
-			case BLACK_FLAME -> "Burning Body";
-			case ENDLESS_SWORD -> "Flowing Edge";
-			case STELLAR_SPEAR -> "Stellar Alignment";
-			case CLOUD_HAMMER -> "Thunderous Weight";
-			case HOLLOW_KING -> "Hollow Circulation";
-			default -> "Enforcer Technique";
-		};
-	}
-
-	private static String getRulerName(CradlePlayerData.Path path) {
-		return switch (path) {
-			case BLACK_FLAME -> "Domain of Ash";
-			case ENDLESS_SWORD -> "Field of Blades";
-			case STELLAR_SPEAR -> "Spear Domain";
-			case CLOUD_HAMMER -> "Gravity Field";
-			case HOLLOW_KING -> "Hollow Domain";
-			default -> "Ruler Technique";
-		};
 	}
 
 	/** Returns true if the entity is hostile toward the given player. */
