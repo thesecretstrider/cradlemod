@@ -16,6 +16,7 @@ import com.cradle.mod.network.DuelInviteReceivedPayload;
 import com.cradle.mod.network.DuelEndPayload;
 import com.cradle.mod.network.AbilityLoadoutSyncPayload;
 import com.cradle.mod.network.UseAbilityPayload;
+import com.cradle.mod.network.UseChargedAbilityPayload;
 import com.cradle.mod.block.CradleBlocks;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.StrikerProjectileRenderer;
@@ -131,6 +132,12 @@ public class CradleModClient implements ClientModInitializer {
 	// Sage keybind hold detection state
 	private static int sageKeyHeldTicks = 0;
 	private static boolean sageKeyWasDown = false;
+
+	// Striker charge-up state (per slot)
+	private static final int[] slotChargeTicks = new int[6];
+	private static final boolean[] slotWasDown = new boolean[6];
+	private static final int MAX_CHARGE_TICKS = 60;
+	private static final float PROGRESSIVE_DRAIN_FRACTION = 0.5f;
 
 	@Override
 	public void onInitializeClient() {
@@ -261,15 +268,64 @@ public class CradleModClient implements ClientModInitializer {
 			}
 
 			// Ability slot keybinds (Z/X/C/R/F/T → slots 0-5)
+			// Strikers use hold-to-charge; Enforcer/Ruler keep instant toggle
 			for (int i = 0; i < 6; i++) {
-				while (SLOT_KEYBINDS[i].consumeClick()) {
-					ClientPlayNetworking.send(new UseAbilityPayload(i));
-					// Start visual cooldown for striker abilities
-					String abilityId = ClientLoadoutData.getAbilityId(i);
-					if (abilityId != null && isStrikerAbility(abilityId)) {
-						long cooldownMs = getStrikerCooldownMs(abilityId);
-						ClientLoadoutData.startCooldown(i, cooldownMs);
+				String abilityId = ClientLoadoutData.getAbilityId(i);
+				boolean isStriker = isStrikerAbility(abilityId);
+
+				if (isStriker && abilityId != null) {
+					// ── STRIKER: Hold-to-charge mechanic ──
+					boolean keyDown = SLOT_KEYBINDS[i].isDown();
+
+					if (keyDown) {
+						if (!slotWasDown[i]) {
+							// Key just pressed — start charging (skip if on cooldown)
+							if (ClientLoadoutData.isOnCooldown(i)) {
+								slotWasDown[i] = true; // Mark down but don't charge
+								slotChargeTicks[i] = -1; // Sentinel: on cooldown
+							} else {
+								slotChargeTicks[i] = 0;
+								ClientLoadoutData.startCharging(i);
+							}
+						}
+
+						// Increment charge (skip if cooldown sentinel)
+						if (slotChargeTicks[i] >= 0) {
+							if (slotChargeTicks[i] < MAX_CHARGE_TICKS) {
+								slotChargeTicks[i]++;
+							}
+							ClientLoadoutData.updateChargeTick(i, slotChargeTicks[i]);
+
+							// Progressive madra drain (visual only — server validates)
+							drainChargeMadra(abilityId);
+
+							// Auto-fire if madra runs out
+							if (ClientCradleData.currentMadra <= 0 && slotChargeTicks[i] > 0) {
+								fireChargedAbility(i);
+							}
+						}
+					} else if (slotWasDown[i]) {
+						// Key released — fire at current charge level
+						if (slotChargeTicks[i] >= 0) {
+							fireChargedAbility(i);
+						} else {
+							// Was on cooldown — just reset
+							slotChargeTicks[i] = 0;
+						}
 					}
+					slotWasDown[i] = keyDown;
+
+					// Consume queued clicks so they don't interfere
+					while (SLOT_KEYBINDS[i].consumeClick()) { /* consumed */ }
+				} else {
+					// ── NON-STRIKER (Enforcer/Ruler): Instant toggle ──
+					while (SLOT_KEYBINDS[i].consumeClick()) {
+						ClientPlayNetworking.send(new UseAbilityPayload(i));
+					}
+					// Reset any stale charge state
+					slotChargeTicks[i] = 0;
+					slotWasDown[i] = false;
+					ClientLoadoutData.stopCharging(i);
 				}
 			}
 
@@ -347,6 +403,57 @@ public class CradleModClient implements ClientModInitializer {
 			// Universal striker
 			case "universal_spirit_pulse" -> 3000L;
 			default -> 2000L;
+		};
+	}
+
+	// ── Striker charge-up helpers ────────────────────────────────────
+
+	/**
+	 * Fire a charged striker ability and clean up charge state.
+	 */
+	private static void fireChargedAbility(int slot) {
+		int chargeTicks = slotChargeTicks[slot];
+		ClientPlayNetworking.send(new UseChargedAbilityPayload(slot, chargeTicks));
+
+		// Start visual cooldown
+		String abilityId = ClientLoadoutData.getAbilityId(slot);
+		if (abilityId != null) {
+			long cooldownMs = getStrikerCooldownMs(abilityId);
+			ClientLoadoutData.startCooldown(slot, cooldownMs);
+		}
+
+		// Reset charge state
+		slotChargeTicks[slot] = 0;
+		slotWasDown[slot] = false;
+		ClientLoadoutData.stopCharging(slot);
+	}
+
+	/**
+	 * Drain a small amount of madra per tick while charging (client-side visual only).
+	 * Server validates the real cost on fire.
+	 */
+	private static void drainChargeMadra(String abilityId) {
+		float baseCost = getApproxBaseMadraCost(abilityId);
+		float drainPerTick = (baseCost * PROGRESSIVE_DRAIN_FRACTION) / MAX_CHARGE_TICKS;
+		ClientCradleData.currentMadra = Math.max(0, ClientCradleData.currentMadra - drainPerTick);
+	}
+
+	/**
+	 * Approximate base madra cost for client-side drain preview.
+	 * Must roughly match server AbilityDefinition values.
+	 */
+	private static float getApproxBaseMadraCost(String id) {
+		if (id == null) return 15.0f;
+		return switch (id) {
+			case "blackflame_burst", "endless_slash", "stellar_piercing_star",
+				 "cloud_falling_hammer", "hollow_empty_palm" -> 15.0f;
+			case "blackflame_meteor" -> 25.0f;
+			case "endless_sword_storm" -> 30.0f;
+			case "stellar_nova" -> 28.0f;
+			case "cloud_thunderstrike" -> 28.0f;
+			case "hollow_nullify" -> 22.0f;
+			case "universal_spirit_pulse" -> 18.0f;
+			default -> 15.0f;
 		};
 	}
 }

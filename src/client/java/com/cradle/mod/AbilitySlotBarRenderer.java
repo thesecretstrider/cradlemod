@@ -84,8 +84,39 @@ public final class AbilitySlotBarRenderer {
 					graphics.fill(x, y, x + SLOT_SIZE, y + cooldownHeight, 0xAA222222);
 				}
 
+				// Charge progress overlay (fills from bottom, yellow→orange)
+				float chargeProgress = ClientLoadoutData.getChargeProgress(i);
+				if (chargeProgress > 0f) {
+					int chargeHeight = (int) (SLOT_SIZE * chargeProgress);
+					int chargeY = y + SLOT_SIZE - chargeHeight;
+
+					// Color shifts from yellow (low charge) to orange-red (full charge)
+					int r = 255;
+					int g = (int) (255 - 100 * chargeProgress); // 255 → 155
+					int b = (int) (50 * (1 - chargeProgress));   // 50 → 0
+					int chargeColor = (0xCC << 24) | (r << 16) | (g << 8) | b;
+
+					graphics.fill(x, chargeY, x + SLOT_SIZE, y + SLOT_SIZE, chargeColor);
+
+					// Pulsing border when fully charged
+					if (chargeProgress >= 1.0f) {
+						long time = System.currentTimeMillis();
+						float pulse = (float) (0.5 + 0.5 * Math.sin(time / 100.0));
+						int alpha = (int) (200 * pulse);
+						int fullChargeGlow = (alpha << 24) | 0xFF6600;
+						graphics.fill(x - 2, y - 2, x + SLOT_SIZE + 2, y + SLOT_SIZE + 2, fullChargeGlow);
+					}
+
+					// Charge percentage text centered in slot
+					String pctStr = String.format("%.0f%%", chargeProgress * 100);
+					int textX = x + (SLOT_SIZE - mc.font.width(pctStr)) / 2;
+					int textY = y + (SLOT_SIZE - 8) / 2;
+					graphics.drawString(mc.font, pctStr, textX, textY, 0xFFFFFF00, true);
+				}
+
 				// Level number (bottom-right corner)
-				if (level > 0) {
+				if (level > 0 && chargeProgress <= 0f) {
+					// Hide level number while charging (charge % takes priority)
 					String lvlStr = String.valueOf(level);
 					int textX = x + SLOT_SIZE - mc.font.width(lvlStr) - 1;
 					int textY = y + SLOT_SIZE - 9;

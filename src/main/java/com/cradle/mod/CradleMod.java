@@ -22,6 +22,7 @@ import com.cradle.mod.network.ChooseIconPayload;
 import com.cradle.mod.network.DuelInviteReceivedPayload;
 import com.cradle.mod.network.DuelEndPayload;
 import com.cradle.mod.network.UseAbilityPayload;
+import com.cradle.mod.network.UseChargedAbilityPayload;
 import com.cradle.mod.network.UpgradeAbilityPayload;
 import com.cradle.mod.network.SwapAbilityPayload;
 import com.cradle.mod.network.BranchAbilityPayload;
@@ -135,6 +136,7 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(UseHeraldPayload.TYPE, UseHeraldPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(ChooseIconPayload.TYPE, ChooseIconPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(UseAbilityPayload.TYPE, UseAbilityPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(UseChargedAbilityPayload.TYPE, UseChargedAbilityPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(UpgradeAbilityPayload.TYPE, UpgradeAbilityPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(SwapAbilityPayload.TYPE, SwapAbilityPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(BranchAbilityPayload.TYPE, BranchAbilityPayload.STREAM_CODEC);
@@ -448,6 +450,15 @@ public class CradleMod implements ModInitializer {
 			ServerPlayer player = context.player();
 			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
 			AbilityExecutor.handleUseAbility(player, payload.slot());
+			sync(player, data);
+			syncLoadout(player, data);
+		});
+
+		// Handle charged ability fire (Striker charge-up system).
+		ServerPlayNetworking.registerGlobalReceiver(UseChargedAbilityPayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+			AbilityExecutor.handleChargedAbility(player, payload.slot(), payload.chargeTicks());
 			sync(player, data);
 			syncLoadout(player, data);
 		});

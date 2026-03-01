@@ -25,6 +25,11 @@ public final class ClientLoadoutData {
 	private static final long[] cooldownEndMs = new long[MAX_SLOTS];
 	private static final long[] cooldownDurationMs = new long[MAX_SLOTS];
 
+	// Charge state tracking for Striker charge-up HUD
+	private static final boolean[] charging = new boolean[MAX_SLOTS];
+	private static final int[] chargeTicks = new int[MAX_SLOTS];
+	public static final int MAX_CHARGE_TICKS = 60;
+
 	private ClientLoadoutData() {}
 
 	/**
@@ -60,6 +65,8 @@ public final class ClientLoadoutData {
 			abilityIds[i] = null;
 			upgradeLevels[i] = 0;
 			slotActive[i] = false;
+			charging[i] = false;
+			chargeTicks[i] = 0;
 		}
 		upgradePoints = 0;
 	}
@@ -113,6 +120,40 @@ public final class ClientLoadoutData {
 	 */
 	public static boolean isOnCooldown(int slot) {
 		return getCooldownProgress(slot) > 0f;
+	}
+
+	// ── Charge tracking ─────────────────────────────────────────────
+
+	public static void startCharging(int slot) {
+		if (slot >= 0 && slot < MAX_SLOTS) {
+			charging[slot] = true;
+			chargeTicks[slot] = 0;
+		}
+	}
+
+	public static void updateChargeTick(int slot, int ticks) {
+		if (slot >= 0 && slot < MAX_SLOTS) {
+			chargeTicks[slot] = ticks;
+		}
+	}
+
+	public static void stopCharging(int slot) {
+		if (slot >= 0 && slot < MAX_SLOTS) {
+			charging[slot] = false;
+			chargeTicks[slot] = 0;
+		}
+	}
+
+	public static boolean isCharging(int slot) {
+		return slot >= 0 && slot < MAX_SLOTS && charging[slot];
+	}
+
+	/**
+	 * Returns charge progress (0.0 = no charge, 1.0 = fully charged).
+	 */
+	public static float getChargeProgress(int slot) {
+		if (slot < 0 || slot >= MAX_SLOTS || !charging[slot]) return 0f;
+		return Math.min(1.0f, chargeTicks[slot] / (float) MAX_CHARGE_TICKS);
 	}
 
 	public static int getEquippedCount() {

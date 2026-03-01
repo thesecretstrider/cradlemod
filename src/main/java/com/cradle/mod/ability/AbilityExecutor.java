@@ -37,6 +37,12 @@ public final class AbilityExecutor {
 	// Hollow King enforcer madra regen offset
 	private static final float HOLLOW_REGEN_BONUS = 0.3f;
 
+	// ── Charge-up constants ──────────────────────────────────────────
+	public static final int MAX_CHARGE_TICKS = 60; // 3 seconds at 20 TPS
+	private static final float CHARGE_POWER_MIN = 1.0f;
+	private static final float CHARGE_POWER_MAX = 3.0f;
+	private static final float PROGRESSIVE_DRAIN_FRACTION = 0.5f; // 50% of base cost drained during hold
+
 	/**
 	 * Called when UseAbilityPayload is received from client.
 	 * Looks up the ability in the player's loadout slot and executes it.
@@ -181,6 +187,120 @@ public final class AbilityExecutor {
 
 			player.displayClientMessage(Component.literal(
 				"\u00a7b" + def.getDisplayName() + " \u00a7aactivated"), true);
+		}
+	}
+
+	// ── Charged Striker fire ─────────────────────────────────────────
+
+	/**
+	 * Called when UseChargedAbilityPayload is received from client.
+	 * Handles the charge-up mechanic for Striker abilities.
+	 * Non-Strikers fall through to normal handleUseAbility().
+	 */
+	public static void handleChargedAbility(ServerPlayer player, int slot, int chargeTicks) {
+		CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+		PlayerLoadout loadout = data.getLoadout();
+
+		if (!loadout.hasAbility(slot)) return;
+
+		String abilityId = loadout.getAbility(slot);
+		AbilityDefinition def = AbilityRegistry.get(abilityId);
+		if (def == null) {
+			CradleMod.LOGGER.warn("Unknown ability in slot {}: {}", slot, abilityId);
+			return;
+		}
+
+		// Only Strikers can be charged — others fall through to normal handling
+		if (def.getType() != AbilityType.STRIKER) {
+			handleUseAbility(player, slot);
+			return;
+		}
+
+		// Check path + stage (same as handleUseAbility)
+		if (!def.isUniversal() && !data.hasChosenPath()) {
+			player.displayClientMessage(Component.literal("\u00a7cChoose a path first!"), true);
+			return;
+		}
+		if (data.getAdvancementStage().ordinal() < def.getUnlockStage().ordinal()) {
+			player.displayClientMessage(Component.literal(
+				"\u00a7cRequires " + def.getUnlockStage().displayName() + " to use " + def.getDisplayName()), true);
+			return;
+		}
+
+		// Clamp charge ticks for anti-cheat
+		int clamped = Math.max(0, Math.min(chargeTicks, MAX_CHARGE_TICKS));
+
+		// Calculate charge multiplier (1.0x at 0 ticks → 3.0x at 60 ticks)
+		float chargeRatio = clamped / (float) MAX_CHARGE_TICKS;
+		float chargeMultiplier = CHARGE_POWER_MIN + chargeRatio * (CHARGE_POWER_MAX - CHARGE_POWER_MIN);
+
+		int upgradeLevel = loadout.getUpgradeLevel(slot);
+
+		// Check cooldown
+		String cooldownKey = player.getUUID().toString() + ":" + slot;
+		long now = System.currentTimeMillis();
+		long lastUse = COOLDOWNS.getOrDefault(cooldownKey, 0L);
+		long cooldownMs = def.getScaledCooldownMs(upgradeLevel);
+		long effectiveCooldown = (long) (cooldownMs * data.getCooldownMultiplier());
+
+		if (now - lastUse < effectiveCooldown) {
+			long remaining = (effectiveCooldown - (now - lastUse)) / 1000;
+			player.displayClientMessage(Component.literal(
+				"\u00a7c" + def.getDisplayName() + " on cooldown (" + remaining + "s)"), true);
+			return;
+		}
+
+		// Calculate total madra cost (base × charge × stage scaling)
+		float baseCost = def.getScaledMadraCost(upgradeLevel) * data.getMadraCostMultiplier();
+		float totalCost = baseCost * chargeMultiplier;
+
+		// Progressive drain: client already drained a fraction during hold (visual only)
+		// Server deducts the full remaining cost
+		float alreadyDrained = baseCost * PROGRESSIVE_DRAIN_FRACTION * chargeRatio;
+		float remainingCost = Math.max(0, totalCost - alreadyDrained);
+
+		if (data.getCurrentMadra() < remainingCost) {
+			player.displayClientMessage(Component.literal("\u00a7cNot enough Madra!"), true);
+			return;
+		}
+
+		// Disrupt cycling if below Underlord
+		disruptCyclingIfNeeded(player, data);
+
+		// Deduct remaining madra
+		data.setCurrentMadra(data.getCurrentMadra() - remainingCost);
+
+		// Fire with charge boost
+		fireChargedStriker(player, data, def, upgradeLevel, chargeMultiplier);
+
+		// Set cooldown
+		COOLDOWNS.put(cooldownKey, now);
+
+		// Display message with charge level
+		if (clamped > 0) {
+			int pct = Math.round(chargeRatio * 100);
+			player.displayClientMessage(Component.literal(
+				"\u00a76" + def.getDisplayName() + "! \u00a7e(" + pct + "% charged)"), true);
+		} else {
+			player.displayClientMessage(Component.literal("\u00a76" + def.getDisplayName() + "!"), true);
+		}
+	}
+
+	/**
+	 * Fires a striker with a charge multiplier applied.
+	 * Sets the transient chargeMultiplier on CradlePlayerData so that
+	 * effectivePower() in AbilityDefinitions picks it up automatically.
+	 */
+	private static void fireChargedStriker(ServerPlayer player, CradlePlayerData data,
+	                                        AbilityDefinition def, int upgradeLevel,
+	                                        float chargeMultiplier) {
+		data.setCurrentChargeMultiplier(chargeMultiplier);
+		try {
+			if (def.getStrikerFire() != null) {
+				def.getStrikerFire().fire(player, data, def, upgradeLevel);
+			}
+		} finally {
+			data.setCurrentChargeMultiplier(1.0f); // Always reset
 		}
 	}
 

@@ -240,6 +240,9 @@ public final class CradlePlayerData {
 	private PlayerLoadout loadout;
 	private boolean copperSightActive; // Toggle for Copper Sight aura particles (Copper+ only)
 
+	// Transient: charge multiplier for current striker fire (set by AbilityExecutor, not persisted)
+	private transient float currentChargeMultiplier = 1.0f;
+
 	private static final float DEFAULT_MAX_MADRA = 100.0f;
 	private static final float DEFAULT_MAX_WILLPOWER = 50.0f;
 
@@ -449,6 +452,10 @@ public final class CradlePlayerData {
 
 	public boolean isCopperSightActive() { return copperSightActive; }
 	public void setCopperSightActive(boolean copperSightActive) { this.copperSightActive = copperSightActive; }
+
+	// Charge multiplier for striker charge-up system (transient, not persisted)
+	public float getCurrentChargeMultiplier() { return currentChargeMultiplier; }
+	public void setCurrentChargeMultiplier(float mult) { this.currentChargeMultiplier = mult; }
 
 	/**
 	 * Returns true if this player has unlocked willpower (Archlord+).

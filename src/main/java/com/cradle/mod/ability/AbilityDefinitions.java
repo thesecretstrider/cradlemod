@@ -68,11 +68,13 @@ public final class AbilityDefinitions {
 	}
 
 	/**
-	 * Calculates effective power multiplier including upgrade level scaling.
-	 * Formula: stageMultiplier * (1.0 + 0.05 * (upgradeLevel - 1))
+	 * Calculates effective power multiplier including upgrade level scaling and charge boost.
+	 * Formula: stageMultiplier * (1.0 + 0.05 * (upgradeLevel - 1)) * chargeMultiplier
+	 * The chargeMultiplier is 1.0 for instant taps, up to 3.0 for fully charged strikers.
 	 */
 	private static float effectivePower(CradlePlayerData data, int upgradeLevel) {
-		return data.getAbilityPowerMultiplier() * (1.0f + 0.05f * (upgradeLevel - 1));
+		return data.getAbilityPowerMultiplier() * (1.0f + 0.05f * (upgradeLevel - 1))
+				* data.getCurrentChargeMultiplier();
 	}
 
 	// ── Registration ──────────────────────────────────────────────────
