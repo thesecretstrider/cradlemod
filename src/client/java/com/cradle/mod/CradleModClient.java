@@ -23,6 +23,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.rendering.v1.BlockRenderLayerMap;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -223,39 +225,47 @@ public class CradleModClient implements ClientModInitializer {
 		);
 
 		// ── Willpower bar (left side of screen, vertical, blue) ─────
-		HudRenderCallback.EVENT.register((graphics, deltaTracker) -> {
-			if (!ClientCradleData.hasWillpower()) return;
+		// Registered BEFORE chat layer so chat text renders on top
+		HudElementRegistry.attachElementBefore(
+				VanillaHudElements.CHAT,
+				net.minecraft.resources.Identifier.fromNamespaceAndPath("cradlemod", "willpower_bar"),
+				(graphics, deltaTracker) -> {
+					if (!ClientCradleData.hasWillpower()) return;
 
-			Minecraft mc = Minecraft.getInstance();
-			int screenHeight = mc.getWindow().getGuiScaledHeight();
+					Minecraft mc = Minecraft.getInstance();
+					int screenHeight = mc.getWindow().getGuiScaledHeight();
 
-			// Bar dimensions and position
-			int barWidth = 6;
-			int barHeight = 60;
-			int barX = 4;                                    // 4px from left edge
-			int barY = (screenHeight / 2) - (barHeight / 2); // vertically centered
+					// Bar dimensions and position
+					int barWidth = 6;
+					int barHeight = 60;
+					int barX = 4;                                    // 4px from left edge
+					int barY = (screenHeight / 2) - (barHeight / 2); // vertically centered
 
-			// Dark background
-			graphics.fill(barX, barY, barX + barWidth, barY + barHeight, 0xFF222222);
+					// Dark background
+					graphics.fill(barX, barY, barX + barWidth, barY + barHeight, 0xFF222222);
 
-			// Blue fill from bottom, based on willpower ratio
-			float ratio = ClientCradleData.maxWillpower > 0
-					? ClientCradleData.currentWillpower / ClientCradleData.maxWillpower : 0f;
-			int fillHeight = (int) (barHeight * Math.min(1f, ratio));
-			if (fillHeight > 0) {
-				graphics.fill(barX, barY + barHeight - fillHeight,
-						barX + barWidth, barY + barHeight, 0xFF4488FF);
-			}
+					// Blue fill from bottom, based on willpower ratio
+					float ratio = ClientCradleData.maxWillpower > 0
+							? ClientCradleData.currentWillpower / ClientCradleData.maxWillpower : 0f;
+					int fillHeight = (int) (barHeight * Math.min(1f, ratio));
+					if (fillHeight > 0) {
+						graphics.fill(barX, barY + barHeight - fillHeight,
+								barX + barWidth, barY + barHeight, 0xFF4488FF);
+					}
 
-			// 1px highlight border on left edge
-			graphics.fill(barX, barY, barX + 1, barY + barHeight, 0x44FFFFFF);
+					// 1px highlight border on left edge
+					graphics.fill(barX, barY, barX + 1, barY + barHeight, 0x44FFFFFF);
 
-			// "WP" label above the bar
-			graphics.drawString(mc.font, "WP", barX - 1, barY - 10, 0xFF6699FF, false);
-		});
+					// "WP" label above the bar
+					graphics.drawString(mc.font, "WP", barX - 1, barY - 10, 0xFF6699FF, false);
+				});
 
 		// ── Ability Slot Bar HUD ─────────────────────────────────────
-		HudRenderCallback.EVENT.register(AbilitySlotBarRenderer::render);
+		// Registered BEFORE chat layer so chat text renders on top of ability icons
+		HudElementRegistry.attachElementBefore(
+				VanillaHudElements.CHAT,
+				net.minecraft.resources.Identifier.fromNamespaceAndPath("cradlemod", "ability_slot_bar"),
+				AbilitySlotBarRenderer::render);
 
 		// ── Keybind + Cycling Particles ──────────────────────────────
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {

@@ -44,16 +44,32 @@ public final class RemnantManager {
 	 */
 	private static void trySpawnPlayerRemnant(ServerLevel level, ServerPlayer player) {
 		CradlePlayerData data = CradlePlayerData.get(player.getUUID());
-		if (data == null) return;
+		if (data == null) {
+			CradleMod.LOGGER.info("[Remnant] Player {} died but has no CradlePlayerData", player.getName().getString());
+			return;
+		}
+
+		CradleMod.LOGGER.info("[Remnant] Player {} died — Stage: {}, Path: {}, InDuel: {}",
+				player.getName().getString(), data.getAdvancementStage(), data.getChosenPath(),
+				DuelManager.isInDuel(player.getUUID()));
 
 		// Foundation players are too weak to leave a Remnant
-		if (data.getAdvancementStage() == CradlePlayerData.AdvancementStage.FOUNDATION) return;
+		if (data.getAdvancementStage() == CradlePlayerData.AdvancementStage.FOUNDATION) {
+			CradleMod.LOGGER.info("[Remnant] Skipped — player is Foundation stage");
+			return;
+		}
 
 		// Must have chosen a path
-		if (!data.hasChosenPath() || data.getChosenPath() == CradlePlayerData.Path.UNSET) return;
+		if (!data.hasChosenPath() || data.getChosenPath() == CradlePlayerData.Path.UNSET) {
+			CradleMod.LOGGER.info("[Remnant] Skipped — player has no path chosen");
+			return;
+		}
 
 		// Don't spawn Remnants during duels
-		if (DuelManager.isInDuel(player.getUUID())) return;
+		if (DuelManager.isInDuel(player.getUUID())) {
+			CradleMod.LOGGER.info("[Remnant] Skipped — player is in a duel");
+			return;
+		}
 
 		// Power level = stage ordinal (Copper=1, Iron=2, Jade=3, ...)
 		int powerLevel = data.getAdvancementStage().ordinal(); // FOUNDATION=0, COPPER=1, etc.
@@ -76,10 +92,18 @@ public final class RemnantManager {
 	 */
 	private static void trySpawnMobRemnant(ServerLevel level, LivingEntity entity) {
 		// Random chance check
-		if (level.random.nextFloat() > MOB_REMNANT_CHANCE) return;
+		float roll = level.random.nextFloat();
+		if (roll > MOB_REMNANT_CHANCE) return;
 
 		// Don't spawn Remnants from tiny/ambient mobs (bats, fish, etc.)
-		if (entity.getMaxHealth() < 8.0f) return;
+		if (entity.getMaxHealth() < 8.0f) {
+			CradleMod.LOGGER.debug("[Remnant] Mob {} passed 15% roll but too small (HP: {})",
+					entity.getType().getDescription().getString(), entity.getMaxHealth());
+			return;
+		}
+
+		CradleMod.LOGGER.info("[Remnant] Mob {} died and passed 15% roll — spawning Remnant",
+				entity.getType().getDescription().getString());
 
 		// Determine path from biome aura
 		Holder<Biome> biome = level.getBiome(entity.blockPosition());
