@@ -106,6 +106,63 @@ public final class CradlePlayerData {
 		}
 	}
 
+	public enum Goldsign {
+		NONE,
+		BLACK_FLAME_EYES,    // Black Flame — burning embers in the eyes
+		SWORD_ARMS,          // Endless Sword — faint blade-like lines along the arms
+		SPEAR_LIGHT,         // Stellar Spear — soft golden glow around the hands
+		CRACKLING_SKIN,      // Cloud Hammer — faint crackling energy across the skin
+		PALE_AURA;           // Hollow King — subtle pale shimmer around the body
+
+		public String displayName() {
+			return switch (this) {
+				case NONE -> "None";
+				case BLACK_FLAME_EYES -> "Burning Eyes";
+				case SWORD_ARMS -> "Blade Arms";
+				case SPEAR_LIGHT -> "Spear Light";
+				case CRACKLING_SKIN -> "Crackling Skin";
+				case PALE_AURA -> "Pale Aura";
+			};
+		}
+
+		public String loreDescription() {
+			return switch (this) {
+				case NONE -> "";
+				case BLACK_FLAME_EYES -> "Dark embers smolder in your eyes — the mark of a Blackflame who consumed a Remnant.";
+				case SWORD_ARMS -> "Faint blade-like lines trace your arms — the mark of a Sword artist who absorbed a Remnant.";
+				case SPEAR_LIGHT -> "A soft golden glow surrounds your hands — the mark of a Spear artist who absorbed a Remnant.";
+				case CRACKLING_SKIN -> "Faint energy crackles across your skin — the mark of a Hammer artist who absorbed a Remnant.";
+				case PALE_AURA -> "A subtle pale shimmer surrounds you — the mark of a Hollow King who absorbed a Remnant.";
+			};
+		}
+
+		public int color() {
+			return switch (this) {
+				case NONE -> 0xFFC0C0C0;
+				case BLACK_FLAME_EYES -> 0xFFFF4400;
+				case SWORD_ARMS -> 0xFFCCCCDD;
+				case SPEAR_LIGHT -> 0xFFFFDD44;
+				case CRACKLING_SKIN -> 0xFF8888CC;
+				case PALE_AURA -> 0xFFDDDDFF;
+			};
+		}
+	}
+
+	/**
+	 * Returns the Goldsign associated with a given Path.
+	 * Each Path has a unique Goldsign that appears when advancing to Gold via Remnant absorption.
+	 */
+	public static Goldsign getGoldsignForPath(Path path) {
+		return switch (path) {
+			case BLACK_FLAME -> Goldsign.BLACK_FLAME_EYES;
+			case ENDLESS_SWORD -> Goldsign.SWORD_ARMS;
+			case STELLAR_SPEAR -> Goldsign.SPEAR_LIGHT;
+			case CLOUD_HAMMER -> Goldsign.CRACKLING_SKIN;
+			case HOLLOW_KING -> Goldsign.PALE_AURA;
+			default -> Goldsign.NONE;
+		};
+	}
+
 	public enum Icon {
 		NONE,
 		DRAGON,
@@ -239,6 +296,8 @@ public final class CradlePlayerData {
 	private int duelDraws;
 	private PlayerLoadout loadout;
 	private boolean copperSightActive; // Toggle for Copper Sight aura particles (Copper+ only)
+	private Goldsign goldsign; // Goldsign from Remnant absorption at Gold
+	private int remnantDeathCount; // How many times player died and left a Remnant (scales Herald fight)
 
 	// Transient: charge multiplier for current striker fire (set by AbilityExecutor, not persisted)
 	private transient float currentChargeMultiplier = 1.0f;
@@ -271,6 +330,8 @@ public final class CradlePlayerData {
 		this.duelDraws = 0;
 		this.loadout = new PlayerLoadout();
 		this.copperSightActive = false;
+		this.goldsign = Goldsign.NONE;
+		this.remnantDeathCount = 0;
 	}
 
 	// ── Getters / setters ──────────────────────────────────────────────
@@ -453,6 +514,14 @@ public final class CradlePlayerData {
 	public boolean isCopperSightActive() { return copperSightActive; }
 	public void setCopperSightActive(boolean copperSightActive) { this.copperSightActive = copperSightActive; }
 
+	public Goldsign getGoldsign() { return goldsign; }
+	public void setGoldsign(Goldsign goldsign) { this.goldsign = Objects.requireNonNull(goldsign, "goldsign"); }
+	public boolean hasGoldsign() { return goldsign != Goldsign.NONE; }
+
+	public int getRemnantDeathCount() { return remnantDeathCount; }
+	public void setRemnantDeathCount(int count) { this.remnantDeathCount = Math.max(0, count); }
+	public void incrementRemnantDeathCount() { this.remnantDeathCount++; }
+
 	// Charge multiplier for striker charge-up system (transient, not persisted)
 	public float getCurrentChargeMultiplier() { return currentChargeMultiplier; }
 	public void setCurrentChargeMultiplier(float mult) { this.currentChargeMultiplier = mult; }
@@ -600,6 +669,8 @@ public final class CradlePlayerData {
 		tag.putInt("duelDraws", duelDraws);
 		tag.put("loadout", loadout.toNbt());
 		tag.putBoolean("copperSightActive", copperSightActive);
+		tag.putString("goldsign", goldsign.name());
+		tag.putInt("remnantDeathCount", remnantDeathCount);
 		return tag;
 	}
 
@@ -658,6 +729,13 @@ public final class CradlePlayerData {
 		data.duelDraws = tag.getIntOr("duelDraws", 0);
 
 		data.copperSightActive = tag.getBooleanOr("copperSightActive", false);
+
+		try {
+			data.goldsign = Goldsign.valueOf(tag.getStringOr("goldsign", "NONE"));
+		} catch (IllegalArgumentException e) {
+			data.goldsign = Goldsign.NONE;
+		}
+		data.remnantDeathCount = tag.getIntOr("remnantDeathCount", 0);
 
 		// Load or migrate ability loadout
 		if (tag.contains("loadout")) {

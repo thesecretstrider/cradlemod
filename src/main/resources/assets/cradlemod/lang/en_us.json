@@ -29,5 +29,6 @@
   "category.cradlemod.cradle": "Cradle",
   "item.cradlemod.underlord_revelation": "Underlord Revelation",
   "item.cradlemod.overlord_revelation": "Overlord Revelation",
-  "item.cradlemod.archlord_revelation": "Archlord Revelation"
+  "item.cradlemod.archlord_revelation": "Archlord Revelation",
+  "entity.cradlemod.remnant": "Remnant"
 }

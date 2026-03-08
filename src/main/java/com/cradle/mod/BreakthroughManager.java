@@ -43,7 +43,7 @@ public final class BreakthroughManager {
 			case COPPER -> 10;
 			case IRON -> 25;
 			case JADE -> 50;
-			case LOW_GOLD -> 100;
+			case LOW_GOLD -> 120; // Higher than before — Remnant absorption is the primary path (level 100)
 			case HIGH_GOLD -> 130;
 			case TRUEGOLD -> 165;
 			case UNDERLORD -> 200;
@@ -63,6 +63,7 @@ public final class BreakthroughManager {
 			case COPPER -> CradleItems.VITAL_FRUIT;
 			case IRON -> CradleItems.SPIRIT_FRUIT;
 			case JADE -> CradleItems.SPIRIT_STONE;
+			case LOW_GOLD -> CradleItems.SPIRIT_STONE; // Natural accumulation path (3 stones, harder)
 			case UNDERLORD -> CradleItems.UNDERLORD_REVELATION;
 			case OVERLORD -> CradleItems.OVERLORD_REVELATION;
 			case ARCHLORD -> CradleItems.ARCHLORD_REVELATION;
@@ -78,6 +79,7 @@ public final class BreakthroughManager {
 			case COPPER -> 5;  // 5 Vital Fruits
 			case IRON -> 5;    // 5 Spirit Fruits
 			case JADE -> 1;    // 1 Spirit Stone
+			case LOW_GOLD -> 3; // 3 Spirit Stones (natural accumulation — expensive to encourage Remnant path)
 			case UNDERLORD -> 1; // 1 Underlord Revelation
 			case OVERLORD -> 1;  // 1 Overlord Revelation
 			case ARCHLORD -> 1;  // 1 Archlord Revelation
@@ -93,6 +95,7 @@ public final class BreakthroughManager {
 			case COPPER -> "Vital Fruit";
 			case IRON -> "Spirit Fruit";
 			case JADE -> "Spirit Stone";
+			case LOW_GOLD -> "Spirit Stone";
 			case UNDERLORD -> "Underlord Revelation";
 			case OVERLORD -> "Overlord Revelation";
 			case ARCHLORD -> "Archlord Revelation";
@@ -208,6 +211,19 @@ public final class BreakthroughManager {
 		CradlePlayerData.AdvancementStage nextStage = getNextStage(data);
 		if (nextStage == null) {
 			return; // At max or needs Sage/Herald choice
+		}
+
+		// Special notification at level 100 for Jade players — Remnant absorption is now available
+		if (nextStage == CradlePlayerData.AdvancementStage.LOW_GOLD
+				&& data.getPlayerLevel() == 100
+				&& data.getAdvancementStage() == CradlePlayerData.AdvancementStage.JADE) {
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A7eYour spirit is strong enough to absorb a Remnant! " +
+					"Find a Remnant of your Path and right-click to begin absorption."
+			));
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A77Alternatively, reach level 120 with 3x Spirit Stones to advance without a Remnant."
+			));
 		}
 
 		int requiredLevel = getLevelForStage(nextStage);
@@ -416,6 +432,14 @@ public final class BreakthroughManager {
 			));
 		}
 
+		// Natural Gold advancement (no Remnant) — extra message noting no Goldsign
+		if (nextStage == CradlePlayerData.AdvancementStage.LOW_GOLD && !data.hasGoldsign()) {
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A77You reached Gold through pure willpower and accumulated madra. " +
+					"Without a Remnant, you bear no Goldsign — but your spirit is no less strong."
+			));
+		}
+
 		// ── Skill Tree: stage-gate ability picks + upgrade points ────
 		handleSkillTreeProgression(player, data, nextStage);
 
@@ -426,6 +450,23 @@ public final class BreakthroughManager {
 
 		CradleMod.LOGGER.info("Player {} broke through to {} at level {}",
 				player.getName().getString(), nextStage.name(), data.getPlayerLevel());
+	}
+
+	/**
+	 * Called by RemnantEntity when a player absorbs a compatible Remnant at Jade.
+	 * Advances directly to Low Gold, bypassing normal item requirements.
+	 * The Goldsign should already be set on the player data before calling this.
+	 */
+	public static void performRemnantBreakthrough(ServerPlayer player, CradlePlayerData data) {
+		CradlePlayerData.AdvancementStage nextStage = CradlePlayerData.AdvancementStage.LOW_GOLD;
+
+		// Show Remnant-specific Goldsign narrative before the standard breakthrough
+		String remnantNarrative = getRemnantBreakthroughNarrative(data.getGoldsign());
+		player.sendSystemMessage(Component.literal(
+				"\u00A76[Cradle] \u00A7d\u00A7o" + remnantNarrative
+		));
+
+		performBreakthrough(player, data, nextStage);
 	}
 
 	// ── Skill Tree Progression ──────────────────────────────────────
@@ -700,7 +741,7 @@ public final class BreakthroughManager {
 			case COPPER -> "Your channels grow stronger. Aura flows through you like a river.";
 			case IRON -> "Your body is forged anew. Flesh and bone are tempered by madra.";
 			case JADE -> "Your spirit awakens. You can sense the vital aura of all living things.";
-			case LOW_GOLD -> "You cycle remnant aura into your own spirit. Gold shines within you.";
+			case LOW_GOLD -> "Gold shines within you. Your madra has transformed.";
 			case HIGH_GOLD -> "Your madra grows denser, more potent. The boundary of Gold deepens.";
 			case TRUEGOLD -> "Your spirit is perfected at the Gold stage. You stand at the threshold of power.";
 			case UNDERLORD -> "You look within and find your truth. The soul ignites with revelation.";
@@ -710,6 +751,20 @@ public final class BreakthroughManager {
 			case HERALD -> "Your spirit and body merge as one. You are no longer bound by mortal form.";
 			case MONARCH -> "You stand at the peak of Cradle. None can challenge your dominion.";
 			default -> "";
+		};
+	}
+
+	/**
+	 * Returns a Remnant-specific narrative when advancing to Gold via absorption.
+	 */
+	public static String getRemnantBreakthroughNarrative(CradlePlayerData.Goldsign goldsign) {
+		return switch (goldsign) {
+			case BLACK_FLAME_EYES -> "The Remnant's fire floods your spirit. Dark embers ignite in your eyes — your Goldsign.";
+			case SWORD_ARMS -> "The Remnant's edge merges with your soul. Blade-like lines trace your arms — your Goldsign.";
+			case SPEAR_LIGHT -> "The Remnant's light flows into you. A golden glow surrounds your hands — your Goldsign.";
+			case CRACKLING_SKIN -> "The Remnant's storm courses through you. Energy crackles across your skin — your Goldsign.";
+			case PALE_AURA -> "The Remnant's purity merges with your spirit. A pale shimmer surrounds you — your Goldsign.";
+			default -> "The Remnant dissolves into your spirit. Gold shines within you.";
 		};
 	}
 

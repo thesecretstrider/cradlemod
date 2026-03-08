@@ -831,6 +831,10 @@ public class CradleMod implements ModInitializer {
 					CyclingManager.deactivateSpiritShift(deadPlayer, deadData);
 				}
 			}
+			// Spawn Remnant entity at death location (players Copper+, mobs 15% chance)
+			if (entity.level() instanceof ServerLevel serverLevel) {
+				RemnantManager.trySpawnRemnant(serverLevel, entity);
+			}
 		});
 
 		// Re-initialize player state after death+respawn.

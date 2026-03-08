@@ -1,5 +1,6 @@
 package com.cradle.mod.entity;
 
+import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -29,7 +30,30 @@ public final class CradleEntities {
 							.build(STRIKER_PROJECTILE_KEY)
 			);
 
+	// ── Remnant Entity ────────────────────────────────────────────────
+
+	public static final ResourceKey<EntityType<?>> REMNANT_KEY =
+			ResourceKey.create(Registries.ENTITY_TYPE,
+					Identifier.fromNamespaceAndPath("cradlemod", "remnant"));
+
+	public static final EntityType<RemnantEntity> REMNANT =
+			Registry.register(
+					BuiltInRegistries.ENTITY_TYPE,
+					REMNANT_KEY,
+					EntityType.Builder.<RemnantEntity>of(
+									RemnantEntity::new,
+									MobCategory.MONSTER
+							)
+							.sized(0.6f, 1.8f)
+							.clientTrackingRange(8)
+							.updateInterval(3)
+							.fireImmune()
+							.build(REMNANT_KEY)
+			);
+
 	public static void register() {
-		// Static init triggers registration
+		// Static init triggers entity type registration.
+		// Register mob attributes for living entities.
+		FabricDefaultAttributeRegistry.register(REMNANT, RemnantEntity.createRemnantAttributes());
 	}
 }

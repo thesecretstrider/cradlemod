@@ -184,6 +184,14 @@ public class CradleInfoScreen extends Screen {
 		}
 		scrollY += lineH;
 
+		// Goldsign (only show if player has one or is Gold+)
+		if (ClientCradleData.hasGoldsign()) {
+			graphics.drawString(this.font, "Goldsign:", panelLeft + 10, scrollY, 0xFFAAAAAA);
+			graphics.drawString(this.font, ClientCradleData.getGoldsignDisplayName(),
+					valColWide, scrollY, ClientCradleData.getGoldsignColor());
+			scrollY += lineH;
+		}
+
 		// Willpower (Archlord+ only)
 		if (ClientCradleData.hasWillpower()) {
 			graphics.drawString(this.font, "Willpower:", panelLeft + 10, scrollY, 0xFFAAAAAA);

@@ -16,6 +16,7 @@ import com.cradle.mod.network.UseAbilityPayload;
 import com.cradle.mod.network.UseChargedAbilityPayload;
 import com.cradle.mod.block.CradleBlocks;
 import com.cradle.mod.entity.CradleEntities;
+import com.cradle.mod.entity.RemnantRenderer;
 import com.cradle.mod.entity.StrikerProjectileRenderer;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
@@ -146,6 +147,7 @@ public class CradleModClient implements ClientModInitializer {
 
 		// ── Register entity renderers ────────────────────────────────
 		EntityRendererRegistry.register(CradleEntities.STRIKER_PROJECTILE, StrikerProjectileRenderer::new);
+		EntityRendererRegistry.register(CradleEntities.REMNANT, RemnantRenderer::new);
 
 		// ── Reset client data when disconnecting ─────────────────────
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {

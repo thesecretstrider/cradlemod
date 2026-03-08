@@ -31,6 +31,7 @@ public final class ClientCradleData {
 	public static float maxWillpower = 50f;
 	public static String icon = "NONE";
 	public static boolean copperSightActive = false;
+	public static int goldsignOrdinal = 0; // 0=NONE, 1=BLACK_FLAME_EYES, etc.
 
 	/**
 	 * Reset all client data to defaults. Called when disconnecting from a world
@@ -58,6 +59,7 @@ public final class ClientCradleData {
 		maxWillpower = 50f;
 		icon = "NONE";
 		copperSightActive = false;
+		goldsignOrdinal = 0;
 	}
 
 	public static void update(CradleSyncPayload payload) {
@@ -82,6 +84,7 @@ public final class ClientCradleData {
 		maxWillpower = payload.maxWillpower();
 		icon = payload.icon();
 		copperSightActive = payload.copperSightActive();
+		goldsignOrdinal = payload.goldsignOrdinal();
 	}
 
 	/**
@@ -170,7 +173,7 @@ public final class ClientCradleData {
 			case "FOUNDATION" -> 10;
 			case "COPPER" -> 25;
 			case "IRON" -> 50;
-			case "JADE" -> 100;
+			case "JADE" -> 120; // Natural accumulation path (Remnant absorption available at 100)
 			case "LOW_GOLD" -> 130;
 			case "HIGH_GOLD" -> 165;
 			case "TRUEGOLD" -> 200;
@@ -310,5 +313,40 @@ public final class ClientCradleData {
 	 */
 	public static boolean isCopper() {
 		return !"FOUNDATION".equals(stage);
+	}
+
+	/**
+	 * Returns true if the player has a Goldsign (from Remnant absorption).
+	 */
+	public static boolean hasGoldsign() {
+		return goldsignOrdinal > 0;
+	}
+
+	/**
+	 * Returns a human-readable display name for the current Goldsign.
+	 */
+	public static String getGoldsignDisplayName() {
+		return switch (goldsignOrdinal) {
+			case 1 -> "Burning Eyes";
+			case 2 -> "Blade Arms";
+			case 3 -> "Spear Light";
+			case 4 -> "Crackling Skin";
+			case 5 -> "Pale Aura";
+			default -> "None";
+		};
+	}
+
+	/**
+	 * Returns the ARGB color for the current Goldsign.
+	 */
+	public static int getGoldsignColor() {
+		return switch (goldsignOrdinal) {
+			case 1 -> 0xFFFF4400;   // Black Flame Eyes — fiery orange
+			case 2 -> 0xFFCCCCDD;   // Sword Arms — silver
+			case 3 -> 0xFFFFDD44;   // Spear Light — gold
+			case 4 -> 0xFF8888CC;   // Crackling Skin — pale blue
+			case 5 -> 0xFFDDDDFF;   // Pale Aura — white-blue
+			default -> 0xFF999999;
+		};
 	}
 }

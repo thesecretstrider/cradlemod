@@ -893,6 +893,9 @@ public final class CyclingManager {
 			flags |= CradleSyncPayload.FLAG_COPPER_SIGHT;
 		}
 
+		// Pack goldsign ordinal into bits 17-19
+		flags |= (data.getGoldsign().ordinal() & CradleSyncPayload.GOLDSIGN_MASK) << CradleSyncPayload.GOLDSIGN_SHIFT;
+
 		return new CradleSyncPayload(
 				data.getPlayerLevel(),
 				data.getCyclingXp(),
