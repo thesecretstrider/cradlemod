@@ -6,8 +6,8 @@
 
 ## Tier 1 — "It's not Cradle without these"
 
-- [ ] **1. Remnants** — Sacred artists/mobs drop Remnants on death. Absorb compatible ones for Lowgold. Incompatible ones attack or debuff. Remnant entities with path-specific appearance
-- [ ] **2. Goldsigns** — Visible cosmetic changes when reaching Gold via Remnant. Path-specific (flame eyes, blade arms, crackling skin, etc.)
+- [x] **1. Remnants** — ~~Sacred artists/mobs drop Remnants on death. Absorb compatible ones for Lowgold. Incompatible ones attack or debuff. Remnant entities with path-specific appearance~~ (Done in Save 45 — full RemnantEntity with spawning, absorption, roaming AI, camp/roam lifecycle)
+- [x] **2. Goldsigns** — ~~Visible cosmetic changes when reaching Gold via Remnant. Path-specific (flame eyes, blade arms, crackling skin, etc.)~~ (Done in Save 45 — 5 Goldsigns: Black Flame Eyes, Sword Arms, Spear Light, Crackling Skin, Pale Aura)
 - [ ] **3. Soulfire** — Lord realm resource bar. Enhances abilities, reforges body at each Lord breakthrough. Visible secondary resource
 - [ ] **4. Foundation Cycling Fix** — Foundation can only cycle pure madra internally (no aura). Aura cycling unlocks at Copper
 
