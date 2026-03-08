@@ -1,3 +1,25 @@
+# Docs Reorganization Implementation Plan
+
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+
+**Goal:** Merge three overlapping docs files (IDEAS.md, ROADMAP.md, LORE-ACCURACY-PLAN.md) into a single ROADMAP.md, clean up CLAUDE.md references, and create the docs/plans/ directory.
+
+**Architecture:** Pure file editing — no code changes. Merge all "what to build" content into one file with 5 sections, delete the redundant files, fix stale CLAUDE.md references.
+
+**Tech Stack:** Markdown files, git
+
+---
+
+### Task 1: Write Merged ROADMAP.md
+
+**Files:**
+- Modify: `docs/ROADMAP.md`
+
+**Step 1: Replace ROADMAP.md with merged content**
+
+Write the following content to `docs/ROADMAP.md`:
+
+```markdown
 # Cradle Mod — Roadmap
 
 > Single source of truth for everything left to build
@@ -86,3 +108,74 @@ Brainstorms not committed to — captured for future reference.
 
 - [ ] Dreadbeast Sheep disabled (incomplete textures, crash on load)
 - [ ] Sheep hostile check commented out in `isHostile()`
+```
+
+**Step 2: Verify the file reads correctly**
+
+Run: `head -5 docs/ROADMAP.md`
+Expected: The new header and subtitle
+
+---
+
+### Task 2: Delete Redundant Files
+
+**Files:**
+- Delete: `docs/IDEAS.md`
+- Delete: `docs/LORE-ACCURACY-PLAN.md`
+
+**Step 1: Delete the files**
+
+```bash
+rm docs/IDEAS.md docs/LORE-ACCURACY-PLAN.md
+```
+
+**Step 2: Verify they're gone**
+
+```bash
+ls docs/
+```
+
+Expected: `DESIGN.md  LORE.md  PROGRESS.md  ROADMAP.md  plans/`
+
+---
+
+### Task 3: Update CLAUDE.md Documentation Section
+
+**Files:**
+- Modify: `CLAUDE.md` (lines 116-122)
+
+**Step 1: Replace the Documentation section**
+
+Find:
+```markdown
+## Documentation
+
+- `PLAN.md` — Current development phases and implementation steps
+- `docs/DESIGN.md` — Visual and mechanical design philosophy
+- `docs/LORE.md` — Cradle universe lore accuracy notes
+- `docs/ROADMAP.md` — Future feature plans
+- `docs/PROGRESS.md` — Current progress tracker
+```
+
+Replace with:
+```markdown
+## Documentation
+
+- `docs/DESIGN.md` — Visual and mechanical design philosophy
+- `docs/LORE.md` — Cradle universe lore reference
+- `docs/ROADMAP.md` — Everything left to build (single source of truth)
+- `docs/PROGRESS.md` — Completed features tracker
+- `docs/plans/` — Design documents from brainstorming sessions
+```
+
+---
+
+### Task 4: Commit
+
+**Step 1: Stage and commit**
+
+```bash
+git add docs/ROADMAP.md docs/plans/2026-03-08-docs-reorganization-design.md docs/plans/2026-03-08-docs-reorganization.md CLAUDE.md
+git rm docs/IDEAS.md docs/LORE-ACCURACY-PLAN.md
+git commit -m "Reorganize docs: merge IDEAS + LORE-ACCURACY-PLAN into ROADMAP, add docs/plans/"
+```

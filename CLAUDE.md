@@ -115,8 +115,8 @@ Mixins are used sparingly — only for things that require hooking vanilla inter
 
 ## Documentation
 
-- `PLAN.md` — Current development phases and implementation steps
 - `docs/DESIGN.md` — Visual and mechanical design philosophy
-- `docs/LORE.md` — Cradle universe lore accuracy notes
-- `docs/ROADMAP.md` — Future feature plans
-- `docs/PROGRESS.md` — Current progress tracker
+- `docs/LORE.md` — Cradle universe lore reference
+- `docs/ROADMAP.md` — Everything left to build (single source of truth)
+- `docs/PROGRESS.md` — Completed features tracker
+- `docs/plans/` — Design documents from brainstorming sessions
