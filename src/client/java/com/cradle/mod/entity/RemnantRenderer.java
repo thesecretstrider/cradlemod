@@ -1,5 +1,6 @@
 package com.cradle.mod.entity;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
@@ -36,6 +37,18 @@ public class RemnantRenderer extends HumanoidMobRenderer<RemnantEntity, RemnantR
 		super.extractRenderState(entity, state, partialTick);
 		state.remnantPath = entity.getRemnantPathName();
 		state.powerLevel = entity.getPowerLevel();
+		state.sourceMobType = entity.getSourceMobType();
+		state.renderScale = entity.getRenderScale();
+	}
+
+	@Override
+	protected void setupRotations(RemnantRenderState state, PoseStack poseStack,
+								   float bodyYRot, float scale) {
+		super.setupRotations(state, poseStack, bodyYRot, scale);
+		// Apply render scale for Herald 2x remnant or mob-specific sizing
+		if (state.renderScale != 1.0f) {
+			poseStack.scale(state.renderScale, state.renderScale, state.renderScale);
+		}
 	}
 
 	@Override

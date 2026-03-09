@@ -42,11 +42,21 @@ public class RemnantEntity extends Monster {
 			SynchedEntityData.defineId(RemnantEntity.class, EntityDataSerializers.STRING);
 	private static final EntityDataAccessor<Integer> POWER_LEVEL =
 			SynchedEntityData.defineId(RemnantEntity.class, EntityDataSerializers.INT);
+	private static final EntityDataAccessor<String> SOURCE_MOB_TYPE =
+			SynchedEntityData.defineId(RemnantEntity.class, EntityDataSerializers.STRING);
+	private static final EntityDataAccessor<Float> RENDER_SCALE =
+			SynchedEntityData.defineId(RemnantEntity.class, EntityDataSerializers.FLOAT);
 
 	// ── Server-only fields ────────────────────────────────────────────
 	private int ticksAlive = 0;
 	private UUID ownerUUID = null; // UUID of the player/entity that spawned this Remnant
 	private boolean roaming = false; // True after camp phase — wanders killing hostiles
+
+	// ── Ability AI state (player remnants only) ──────────────────────
+	private com.cradle.mod.ability.PlayerLoadout storedLoadout = null;
+	private float madraPool = 0f;
+	private float maxMadraPool = 0f;
+	private RemnantAbilityAI abilityAI = null;
 
 	// ── Absorption channeling state ───────────────────────────────────
 	private UUID absorbingPlayerUUID = null;
@@ -71,6 +81,8 @@ public class RemnantEntity extends Monster {
 		super.defineSynchedData(builder);
 		builder.define(REMNANT_PATH, "BLACK_FLAME");
 		builder.define(POWER_LEVEL, 1);
+		builder.define(SOURCE_MOB_TYPE, "minecraft:zombie");
+		builder.define(RENDER_SCALE, 1.0f);
 	}
 
 	// ── Getters / Setters ─────────────────────────────────────────────
@@ -99,20 +111,50 @@ public class RemnantEntity extends Monster {
 		this.ownerUUID = ownerUUID;
 	}
 
+	public String getSourceMobType() {
+		return this.entityData.get(SOURCE_MOB_TYPE);
+	}
+
+	public void setSourceMobType(String mobType) {
+		this.entityData.set(SOURCE_MOB_TYPE, mobType != null ? mobType : "minecraft:zombie");
+		refreshDimensions();
+	}
+
+	public float getRenderScale() {
+		return this.entityData.get(RENDER_SCALE);
+	}
+
+	public void setRenderScale(float scale) {
+		this.entityData.set(RENDER_SCALE, Math.max(0.1f, scale));
+	}
+
+	public com.cradle.mod.ability.PlayerLoadout getStoredLoadout() { return storedLoadout; }
+	public void setStoredLoadout(com.cradle.mod.ability.PlayerLoadout loadout) { this.storedLoadout = loadout; }
+	public float getMadraPool() { return madraPool; }
+	public void setMadraPool(float madra) { this.madraPool = Math.max(0, madra); }
+	public float getMaxMadraPool() { return maxMadraPool; }
+	public void setMaxMadraPool(float max) { this.maxMadraPool = max; }
+
 	/**
-	 * Initialize this Remnant after spawning with path, power, and stats.
-	 * Call this on the server immediately after creating the entity.
+	 * Initialize this Remnant with path, power, owner, and source mob type.
 	 */
-	public void initRemnant(CradlePlayerData.Path path, int powerLevel, UUID ownerUUID) {
+	public void initRemnant(CradlePlayerData.Path path, int powerLevel, UUID ownerUUID, String sourceMobType) {
 		setRemnantPath(path);
 		setPowerLevel(powerLevel);
 		this.ownerUUID = ownerUUID;
+		setSourceMobType(sourceMobType);
 
-		// Scale health and damage based on power level
-		float health = 20.0f + (powerLevel * 5.0f);
+		// Scale health based on power level (updated formula)
+		float health = 20.0f + (powerLevel * 10.0f);
 		this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(health);
 		this.setHealth(health);
-		this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(3.0 + (powerLevel * 1.5));
+		// Attack damage is now calculated dynamically via stage-relative scaling in doHurtTarget
+		this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(2.0);
+	}
+
+	/** Backward-compat overload — defaults to zombie source type. */
+	public void initRemnant(CradlePlayerData.Path path, int powerLevel, UUID ownerUUID) {
+		initRemnant(path, powerLevel, ownerUUID, "minecraft:zombie");
 	}
 
 	// ── AI Goals ──────────────────────────────────────────────────────
@@ -156,6 +198,14 @@ public class RemnantEntity extends Monster {
 
 			// Handle absorption channeling
 			tickAbsorption();
+
+			// Tick ability AI for player remnants
+			if (storedLoadout != null && level() instanceof ServerLevel serverLevel) {
+				if (abilityAI == null) {
+					abilityAI = new RemnantAbilityAI(this);
+				}
+				abilityAI.tick(serverLevel);
+			}
 		}
 
 		// Client-side: emit path-colored particles
@@ -330,6 +380,36 @@ public class RemnantEntity extends Monster {
 		absorbStartPos = null;
 	}
 
+	// ── Stage-relative damage ────────────────────────────────────────
+
+	@Override
+	public boolean doHurtTarget(ServerLevel level, net.minecraft.world.entity.Entity target) {
+		float damage = calculateStageDamage(target);
+		boolean hit = target.hurtOrSimulate(this.damageSources().mobAttack(this), damage);
+		if (hit && target instanceof LivingEntity living) {
+			float knockback = 0.5f + (getPowerLevel() * 0.1f);
+			living.knockback(knockback, Math.sin(this.getYRot() * Math.PI / 180.0),
+					-Math.cos(this.getYRot() * Math.PI / 180.0));
+		}
+		return hit;
+	}
+
+	private float calculateStageDamage(net.minecraft.world.entity.Entity target) {
+		int victimStage = 0;
+		if (target instanceof ServerPlayer player) {
+			CradlePlayerData data = CradlePlayerData.get(player.getUUID());
+			if (data != null) {
+				victimStage = data.getAdvancementStage().ordinal();
+			}
+		}
+		int stageGap = getPowerLevel() - victimStage;
+		if (stageGap >= 0) {
+			return 2.0f + (stageGap * 4.5f);
+		} else {
+			return Math.max(1.0f, 2.0f + (stageGap * 0.5f));
+		}
+	}
+
 	// ── Damage handling ───────────────────────────────────────────────
 
 	@Override
@@ -386,6 +466,39 @@ public class RemnantEntity extends Monster {
 		};
 	}
 
+	// ── Dynamic dimensions ───────────────────────────────────────────
+
+	@Override
+	public net.minecraft.world.entity.EntityDimensions getDefaultDimensions(net.minecraft.world.entity.Pose pose) {
+		float scale = getRenderScale();
+		net.minecraft.world.entity.EntityDimensions base = getMobDimensions(getSourceMobType());
+		if (scale != 1.0f) {
+			return base.scale(scale);
+		}
+		return base;
+	}
+
+	private static net.minecraft.world.entity.EntityDimensions getMobDimensions(String mobType) {
+		return switch (mobType) {
+			case "minecraft:spider" -> net.minecraft.world.entity.EntityDimensions.scalable(1.4f, 0.9f);
+			case "minecraft:enderman" -> net.minecraft.world.entity.EntityDimensions.scalable(0.6f, 2.9f);
+			case "minecraft:creeper" -> net.minecraft.world.entity.EntityDimensions.scalable(0.6f, 1.7f);
+			case "minecraft:skeleton" -> net.minecraft.world.entity.EntityDimensions.scalable(0.6f, 1.99f);
+			case "minecraft:blaze" -> net.minecraft.world.entity.EntityDimensions.scalable(0.6f, 1.8f);
+			case "minecraft:guardian" -> net.minecraft.world.entity.EntityDimensions.scalable(0.85f, 0.85f);
+			case "minecraft:phantom" -> net.minecraft.world.entity.EntityDimensions.scalable(0.9f, 0.5f);
+			case "minecraft:warden" -> net.minecraft.world.entity.EntityDimensions.scalable(0.9f, 2.9f);
+			case "minecraft:ravager" -> net.minecraft.world.entity.EntityDimensions.scalable(1.95f, 2.2f);
+			case "minecraft:iron_golem" -> net.minecraft.world.entity.EntityDimensions.scalable(1.4f, 2.7f);
+			case "minecraft:cow", "minecraft:pig", "minecraft:sheep" ->
+					net.minecraft.world.entity.EntityDimensions.scalable(0.9f, 1.4f);
+			case "minecraft:chicken" -> net.minecraft.world.entity.EntityDimensions.scalable(0.4f, 0.7f);
+			case "minecraft:wolf" -> net.minecraft.world.entity.EntityDimensions.scalable(0.6f, 0.85f);
+			case "minecraft:horse" -> net.minecraft.world.entity.EntityDimensions.scalable(1.4f, 1.6f);
+			default -> net.minecraft.world.entity.EntityDimensions.scalable(0.6f, 1.8f);
+		};
+	}
+
 	// ── Misc overrides ────────────────────────────────────────────────
 
 	@Override
@@ -419,6 +532,13 @@ public class RemnantEntity extends Monster {
 		if (ownerUUID != null) {
 			output.putString("OwnerUUID", ownerUUID.toString());
 		}
+		output.putString("SourceMobType", getSourceMobType());
+		output.putFloat("RenderScale", getRenderScale());
+		output.putFloat("MadraPool", madraPool);
+		output.putFloat("MaxMadraPool", maxMadraPool);
+		if (storedLoadout != null) {
+			output.store("StoredLoadout", net.minecraft.nbt.CompoundTag.CODEC, storedLoadout.toNbt());
+		}
 	}
 
 	@Override
@@ -443,10 +563,19 @@ public class RemnantEntity extends Monster {
 			transitionToRoaming();
 		}
 
-		// Restore scaled attributes from power level
+		// Restore new fields
+		this.entityData.set(SOURCE_MOB_TYPE, input.getStringOr("SourceMobType", "minecraft:zombie"));
+		this.entityData.set(RENDER_SCALE, input.getFloatOr("RenderScale", 1.0f));
+		madraPool = input.getFloatOr("MadraPool", 0f);
+		maxMadraPool = input.getFloatOr("MaxMadraPool", 0f);
+		input.read("StoredLoadout", net.minecraft.nbt.CompoundTag.CODEC).ifPresent(tag -> {
+			storedLoadout = com.cradle.mod.ability.PlayerLoadout.fromNbt(tag);
+		});
+
+		// Restore scaled attributes from power level (updated formula)
 		int power = getPowerLevel();
-		float health = 20.0f + (power * 5.0f);
+		float health = 20.0f + (power * 10.0f);
 		this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(health);
-		this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(3.0 + (power * 1.5));
+		this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(2.0);
 	}
 }

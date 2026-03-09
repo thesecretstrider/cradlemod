@@ -8,12 +8,13 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import com.cradle.mod.entity.CradleEntities;
+import com.cradle.mod.entity.RemnantEntity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.animal.golem.IronGolem;
 import net.minecraft.world.entity.monster.Phantom;
 import net.minecraft.world.entity.monster.Vex;
 import net.minecraft.world.entity.monster.zombie.Zombie;
@@ -175,40 +176,34 @@ public final class RevelationTrialManager {
 		double bossZ = player.getZ() + look.z * 5.0;
 		double bossY = player.getY();
 
-		IronGolem remnant = new IronGolem(EntityType.IRON_GOLEM, serverLevel);
+		// Death count scaling: +25 HP and +10% madra per prior death
+		int deathCount = data.getRemnantDeathCount();
+		float baseHealth = 200.0f + (deathCount * 25.0f);
+		float madraMultiplier = 1.5f + (deathCount * 0.1f);
+
+		RemnantEntity remnant = new RemnantEntity(CradleEntities.REMNANT, serverLevel);
 		remnant.setPos(bossX, bossY, bossZ);
 
-		// Custom name: "§d<PlayerName>'s Remnant" — always visible
+		// Initialize as a player-type remnant with full Monarch power
+		remnant.initRemnant(data.getChosenPath(), 12, player.getUUID(), "cradlemod:player");
+		remnant.setRenderScale(2.0f);
+
+		// Override health for boss fight
+		remnant.getAttribute(Attributes.MAX_HEALTH).setBaseValue(baseHealth);
+		remnant.setHealth(baseHealth);
+
+		// Copy player's full loadout
+		remnant.setStoredLoadout(data.getLoadout());
+		remnant.setMaxMadraPool(data.getMaxMadra() * madraMultiplier);
+		remnant.setMadraPool(data.getMaxMadra() * madraMultiplier);
+
+		// Custom name
 		remnant.setCustomName(Component.literal(
 				"\u00A7d" + player.getName().getString() + "'s Remnant"));
 		remnant.setCustomNameVisible(true);
 
-		// Make it not player-created so it's hostile
-		remnant.setPlayerCreated(false);
-
-		// Boost health to 100 HP (50 hearts) — Iron Golem default is 100, but ensure it
-		AttributeInstance maxHealthAttr = remnant.getAttribute(Attributes.MAX_HEALTH);
-		if (maxHealthAttr != null) {
-			maxHealthAttr.setBaseValue(100.0);
-		}
-		remnant.setHealth(100.0f);
-
-		// Boost attack damage (+5 above base)
-		AttributeInstance attackAttr = remnant.getAttribute(Attributes.ATTACK_DAMAGE);
-		if (attackAttr != null) {
-			attackAttr.setBaseValue(attackAttr.getBaseValue() + 5.0);
-		}
-
-		// Boost speed slightly for a more challenging fight
-		AttributeInstance speedAttr = remnant.getAttribute(Attributes.MOVEMENT_SPEED);
-		if (speedAttr != null) {
-			speedAttr.setBaseValue(speedAttr.getBaseValue() * 1.3);
-		}
-
-		// Effects: Glowing (always visible), Fire Resistance, Speed I
+		// Effects: Glowing
 		remnant.addEffect(new MobEffectInstance(MobEffects.GLOWING, 999999, 0, false, false));
-		remnant.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 999999, 0, false, false));
-		remnant.addEffect(new MobEffectInstance(MobEffects.SPEED, 999999, 0, false, false));
 
 		// Target the player
 		remnant.setTarget(player);
@@ -224,8 +219,8 @@ public final class RevelationTrialManager {
 		player.sendSystemMessage(Component.literal(
 				"\u00A76[Cradle] \u00A7d\u00A7oDefeat it to merge body and spirit. Fail, and you will be consumed."));
 
-		CradleMod.LOGGER.info("Player {} started Herald Remnant trial (Iron Golem boss, 100 HP)",
-				player.getName().getString());
+		CradleMod.LOGGER.info("Player {} started Herald Remnant trial (RemnantEntity boss, {} HP, {}x madra)",
+				player.getName().getString(), baseHealth, madraMultiplier);
 	}
 
 	/**

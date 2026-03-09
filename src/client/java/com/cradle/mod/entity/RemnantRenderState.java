@@ -9,4 +9,6 @@ import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
 public class RemnantRenderState extends HumanoidRenderState {
 	public String remnantPath = "BLACK_FLAME";
 	public int powerLevel = 1;
+	public String sourceMobType = "minecraft:zombie";
+	public float renderScale = 1.0f;
 }

@@ -76,7 +76,13 @@ public final class RemnantManager {
 
 		RemnantEntity remnant = new RemnantEntity(CradleEntities.REMNANT, level);
 		remnant.setPos(player.getX(), player.getY(), player.getZ());
-		remnant.initRemnant(data.getChosenPath(), powerLevel, player.getUUID());
+		remnant.initRemnant(data.getChosenPath(), powerLevel, player.getUUID(), "cradlemod:player");
+
+		// Copy player's ability loadout to remnant for ability AI
+		remnant.setStoredLoadout(data.getLoadout());
+		remnant.setMaxMadraPool(data.getMaxMadra());
+		remnant.setMadraPool(data.getMaxMadra());
+
 		level.addFreshEntity(remnant);
 
 		// Increment death counter (scales Herald fight difficulty later)
@@ -113,9 +119,13 @@ public final class RemnantManager {
 		// Mob Remnants are always weak (power 1-2)
 		int powerLevel = level.random.nextInt(2) + 1; // 1 or 2
 
+		// Get the mob's registry name (e.g. "minecraft:spider")
+		String mobType = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
+				.getKey(entity.getType()).toString();
+
 		RemnantEntity remnant = new RemnantEntity(CradleEntities.REMNANT, level);
 		remnant.setPos(entity.getX(), entity.getY(), entity.getZ());
-		remnant.initRemnant(remnantPath, powerLevel, null);
+		remnant.initRemnant(remnantPath, powerLevel, null, mobType);
 		level.addFreshEntity(remnant);
 	}
 
