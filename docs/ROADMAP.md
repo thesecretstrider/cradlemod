@@ -20,6 +20,7 @@ These can be implemented right now with no new art needed.
 
 Designed but blocked on custom art/models.
 
+- [ ] **Sword Slash Particle** — Custom particle for Endless Sword striker techniques. PNG in `textures/particle/sword_slash.png`. Needs: register particle type, particle JSON, client factory, spawn on Endless Sword striker fire
 - [ ] **Dreadbeast Sheep** — 3 texture layers needed (wool/undercoat). Mixin disabled in Save 43
 - [ ] **More Dreadbeast Animals** — Pig (3 files), Chicken (3), Spider (2), Goat (1), Fox (4)
 - [ ] **Sacred Beast Mobs** — Custom entity with path-specific behavior, three tiers, path drops

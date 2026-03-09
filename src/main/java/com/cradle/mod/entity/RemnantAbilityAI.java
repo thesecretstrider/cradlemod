@@ -25,6 +25,7 @@ public final class RemnantAbilityAI {
 	private final RemnantEntity remnant;
 	private final Map<Integer, Long> cooldowns = new HashMap<>();
 	private final Set<Integer> activeToggleSlots = new HashSet<>();
+	private final Map<Integer, Integer> rulerTickCounters = new HashMap<>();
 	private int decisionTicks = 0;
 	private final int abilityCount;
 
@@ -110,13 +111,13 @@ public final class RemnantAbilityAI {
 
 		switch (def.getType()) {
 			case STRIKER -> {
-				// Fire and forget: deduct madra, apply cooldown
+				// Fire and forget: deduct madra, apply cooldown, fire projectile
 				remnant.setMadraPool(remnant.getMadraPool() - cost);
 				setCooldown(slot);
-				// Look at target before firing
 				remnant.getLookControl().setLookAt(target);
-				// Note: Striker handlers expect ServerPlayer — entity-aware adapters
-				// are a future task. For now, the madra is consumed but no projectile fires.
+				if (remnant.level() instanceof ServerLevel serverLevel) {
+					RemnantAbilityExecutor.fireStriker(remnant, serverLevel, def, upgradeLevel);
+				}
 				return true;
 			}
 			case ENFORCER -> {
@@ -129,6 +130,7 @@ public final class RemnantAbilityAI {
 			case RULER -> {
 				if (!activeToggleSlots.contains(slot)) {
 					activeToggleSlots.add(slot);
+					rulerTickCounters.put(slot, 0);
 					return true;
 				}
 				return false;
@@ -140,6 +142,7 @@ public final class RemnantAbilityAI {
 	private void tickActiveAbilities() {
 		PlayerLoadout loadout = remnant.getStoredLoadout();
 		if (loadout == null) return;
+		if (!(remnant.level() instanceof ServerLevel serverLevel)) return;
 
 		Iterator<Integer> iter = activeToggleSlots.iterator();
 		while (iter.hasNext()) {
@@ -154,15 +157,50 @@ public final class RemnantAbilityAI {
 			remnant.setMadraPool(remnant.getMadraPool() - drain);
 
 			if (remnant.getMadraPool() <= 0) {
+				// Out of madra — deactivate and clean up
+				if (def.getType() == AbilityType.ENFORCER) {
+					RemnantAbilityExecutor.deactivateEnforcer(remnant, def);
+				}
+				rulerTickCounters.remove(slot);
 				iter.remove();
+				continue;
 			}
-			// Note: Actual ability effects (enforcer buffs, ruler areas) need
-			// entity-aware handler adapters — future task.
+
+			// Apply actual ability effects
+			switch (def.getType()) {
+				case ENFORCER -> {
+					RemnantAbilityExecutor.tickEnforcer(remnant, serverLevel, def, upgradeLevel);
+				}
+				case RULER -> {
+					// Ruler area effects apply every RULER_EFFECT_INTERVAL ticks (0.5s)
+					int ticks = rulerTickCounters.getOrDefault(slot, 0) + 1;
+					if (ticks >= RemnantAbilityExecutor.getRulerEffectInterval()) {
+						ticks = 0;
+						RemnantAbilityExecutor.tickRuler(remnant, serverLevel, def, upgradeLevel);
+					}
+					rulerTickCounters.put(slot, ticks);
+				}
+				default -> {} // Strikers don't tick
+			}
 		}
 	}
 
 	private void deactivateAll() {
-		activeToggleSlots.clear();
+		if (!activeToggleSlots.isEmpty()) {
+			PlayerLoadout loadout = remnant.getStoredLoadout();
+			if (loadout != null) {
+				for (int slot : activeToggleSlots) {
+					String abilityId = loadout.getAbility(slot);
+					if (abilityId == null) continue;
+					AbilityDefinition def = AbilityRegistry.get(abilityId);
+					if (def != null && def.getType() == AbilityType.ENFORCER) {
+						RemnantAbilityExecutor.deactivateEnforcer(remnant, def);
+					}
+				}
+			}
+			activeToggleSlots.clear();
+			rulerTickCounters.clear();
+		}
 	}
 
 	private boolean isOnCooldown(int slot, AbilityDefinition def, int upgradeLevel) {
