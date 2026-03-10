@@ -129,7 +129,14 @@ public class RemnantEntity extends Monster {
 	}
 
 	public com.cradle.mod.ability.PlayerLoadout getStoredLoadout() { return storedLoadout; }
-	public void setStoredLoadout(com.cradle.mod.ability.PlayerLoadout loadout) { this.storedLoadout = loadout; }
+	public void setStoredLoadout(com.cradle.mod.ability.PlayerLoadout loadout) {
+		this.storedLoadout = loadout;
+		if (loadout != null) {
+			this.abilityAI = new RemnantAbilityAI(this);
+		} else {
+			this.abilityAI = null;
+		}
+	}
 	public float getMadraPool() { return madraPool; }
 	public void setMadraPool(float madra) { this.madraPool = Math.max(0, madra); }
 	public float getMaxMadraPool() { return maxMadraPool; }
@@ -200,10 +207,7 @@ public class RemnantEntity extends Monster {
 			tickAbsorption();
 
 			// Tick ability AI for player remnants
-			if (storedLoadout != null && level() instanceof ServerLevel serverLevel) {
-				if (abilityAI == null) {
-					abilityAI = new RemnantAbilityAI(this);
-				}
+			if (abilityAI != null && level() instanceof ServerLevel serverLevel) {
 				abilityAI.tick(serverLevel);
 			}
 		}
@@ -572,7 +576,7 @@ public class RemnantEntity extends Monster {
 		madraPool = input.getFloatOr("MadraPool", 0f);
 		maxMadraPool = input.getFloatOr("MaxMadraPool", 0f);
 		input.read("StoredLoadout", net.minecraft.nbt.CompoundTag.CODEC).ifPresent(tag -> {
-			storedLoadout = com.cradle.mod.ability.PlayerLoadout.fromNbt(tag);
+			setStoredLoadout(com.cradle.mod.ability.PlayerLoadout.fromNbt(tag));
 		});
 
 		// Restore scaled attributes from power level (updated formula)

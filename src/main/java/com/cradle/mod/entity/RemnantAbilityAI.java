@@ -26,6 +26,7 @@ public final class RemnantAbilityAI {
 	private final Map<Integer, Long> cooldowns = new HashMap<>();
 	private final Set<Integer> activeToggleSlots = new HashSet<>();
 	private final Map<Integer, Integer> rulerTickCounters = new HashMap<>();
+	private final List<int[]> candidateBuffer = new ArrayList<>();
 	private int decisionTicks = 0;
 	private boolean firstAttack = true;
 	private final int abilityCount;
@@ -80,7 +81,7 @@ public final class RemnantAbilityAI {
 		}
 
 		// Build list of usable abilities (up to abilityCount), preferring the right type
-		List<int[]> candidates = new ArrayList<>();
+		candidateBuffer.clear();
 		for (int slot = 0; slot < Math.min(PlayerLoadout.MAX_SLOTS, abilityCount); slot++) {
 			if (!loadout.hasAbility(slot)) continue;
 			AbilityDefinition def = AbilityRegistry.get(loadout.getAbility(slot));
@@ -88,14 +89,14 @@ public final class RemnantAbilityAI {
 			if (isOnCooldown(slot, def, loadout.getUpgradeLevel(slot))) continue;
 
 			int priority = (def.getType() == preferred) ? 0 : 1;
-			candidates.add(new int[]{slot, priority});
+			candidateBuffer.add(new int[]{slot, priority});
 		}
 
 		// Sort by priority (preferred type first)
-		candidates.sort(Comparator.comparingInt(a -> a[1]));
+		candidateBuffer.sort(Comparator.comparingInt(a -> a[1]));
 
 		// Try to use the best candidate
-		for (int[] candidate : candidates) {
+		for (int[] candidate : candidateBuffer) {
 			int slot = candidate[0];
 			if (tryUseAbility(slot, target)) {
 				break;

@@ -45,6 +45,8 @@ public final class AbilitySlotBarRenderer {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.player == null) return;
 
+		long time = System.currentTimeMillis();
+
 		int screenHeight = mc.getWindow().getGuiScaledHeight();
 		int barY = screenHeight - BAR_Y_OFFSET - SLOT_SIZE;
 
@@ -66,7 +68,6 @@ public final class AbilitySlotBarRenderer {
 				// Active glow border
 				if (isActive) {
 					// Pulsing glow effect
-					long time = System.currentTimeMillis();
 					float pulse = (float) (0.6 + 0.4 * Math.sin(time / 200.0));
 					int alpha = (int) (255 * pulse);
 					int glowColor = (alpha << 24) | (COLOR_ACTIVE_GLOW & 0x00FFFFFF);
@@ -100,7 +101,6 @@ public final class AbilitySlotBarRenderer {
 
 					// Pulsing border when fully charged
 					if (chargeProgress >= 1.0f) {
-						long time = System.currentTimeMillis();
 						float pulse = (float) (0.5 + 0.5 * Math.sin(time / 100.0));
 						int alpha = (int) (200 * pulse);
 						int fullChargeGlow = (alpha << 24) | 0xFF6600;

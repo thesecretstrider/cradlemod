@@ -302,6 +302,10 @@ public final class CradlePlayerData {
 	// Transient: charge multiplier for current striker fire (set by AbilityExecutor, not persisted)
 	private transient float currentChargeMultiplier = 1.0f;
 
+	// ── Performance: cached canAdvance result ─────────────────────────
+	private transient boolean cachedCanAdvance = false;
+	private transient boolean canAdvanceDirty = true; // Start dirty so first check runs
+
 	private static final float DEFAULT_MAX_MADRA = 100.0f;
 	private static final float DEFAULT_MAX_WILLPOWER = 50.0f;
 
@@ -342,6 +346,7 @@ public final class CradlePlayerData {
 
 	public void setPlayerLevel(int playerLevel) {
 		this.playerLevel = playerLevel;
+		invalidateCanAdvance();
 	}
 
 	public int getCyclingXp() {
@@ -358,6 +363,7 @@ public final class CradlePlayerData {
 
 	public void setAdvancementStage(AdvancementStage advancementStage) {
 		this.advancementStage = Objects.requireNonNull(advancementStage, "advancementStage");
+		invalidateCanAdvance();
 	}
 
 	public Path getChosenPath() {
@@ -438,6 +444,7 @@ public final class CradlePlayerData {
 
 	public void setHasSage(boolean hasSage) {
 		this.hasSage = hasSage;
+		invalidateCanAdvance();
 	}
 
 	public boolean hasHerald() {
@@ -446,6 +453,7 @@ public final class CradlePlayerData {
 
 	public void setHasHerald(boolean hasHerald) {
 		this.hasHerald = hasHerald;
+		invalidateCanAdvance();
 	}
 
 	public Icon getChosenIcon() {
@@ -525,6 +533,23 @@ public final class CradlePlayerData {
 	// Charge multiplier for striker charge-up system (transient, not persisted)
 	public float getCurrentChargeMultiplier() { return currentChargeMultiplier; }
 	public void setCurrentChargeMultiplier(float mult) { this.currentChargeMultiplier = mult; }
+
+	// ── canAdvance cache (avoids inventory scan every tick) ───────────
+
+	/** Mark the canAdvance cache as stale. Called on level-up, stage change, etc. */
+	public void invalidateCanAdvance() { this.canAdvanceDirty = true; }
+
+	/** Returns true if the cache needs recalculation. */
+	public boolean isCanAdvanceDirty() { return canAdvanceDirty; }
+
+	/** Updates the cached canAdvance result. */
+	public void setCachedCanAdvance(boolean value) {
+		this.cachedCanAdvance = value;
+		this.canAdvanceDirty = false;
+	}
+
+	/** Returns the cached canAdvance result (may be stale — caller must check dirty flag). */
+	public boolean getCachedCanAdvance() { return cachedCanAdvance; }
 
 	/**
 	 * Returns true if this player has unlocked willpower (Archlord+).

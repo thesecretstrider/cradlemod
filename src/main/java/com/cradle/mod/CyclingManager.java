@@ -80,21 +80,10 @@ public final class CyclingManager {
 	private static final float ENVIRONMENTAL_BONUS = 1.5f;
 	// How often to check environment (every N ticks) — avoids scanning blocks every tick
 	private static final int ENVIRONMENT_CHECK_INTERVAL = 20; // 1 second
-	// Tracks environment check counter per player
-	private static final Map<UUID, Integer> ENVIRONMENT_CHECK_TICKS = new HashMap<>();
-	// Cached environment bonus per player (updated every ENVIRONMENT_CHECK_INTERVAL)
-	private static final Map<UUID, Float> CACHED_ENV_BONUS = new HashMap<>();
-
 	// Flight: particle spawn interval (every N ticks while flying)
 	private static final int FLIGHT_PARTICLE_INTERVAL = 5;
-	private static final Map<UUID, Integer> FLIGHT_PARTICLE_TICKS = new HashMap<>();
-	// Tracks whether the player was actively flying last tick (for cushioned landing detection)
-	private static final Map<UUID, Boolean> WAS_FLYING_LAST_TICK = new HashMap<>();
 	// Slow Falling duration for cushioned landing (3 seconds = 60 ticks)
 	private static final int CUSHIONED_LANDING_DURATION = 60;
-
-	// Tracks player position when they start cycling (for movement detection)
-	private static final Map<UUID, double[]> CYCLING_POSITIONS = new HashMap<>();
 
 	// ── Enforcer tuning constants ─────────────────────────────────────
 	// Madra drain per tick while Enforcer is active (base rate, before path modifier)
@@ -119,8 +108,7 @@ public final class CyclingManager {
 	private static final Identifier HERALD_SPEED_ID = Identifier.fromNamespaceAndPath("cradlemod", "herald_speed");
 	private static final Identifier HERALD_ARMOR_ID = Identifier.fromNamespaceAndPath("cradlemod", "herald_armor");
 
-	// Tracks strain tick counter for Burning Body (Black Flame)
-	private static final Map<UUID, Integer> BURNING_BODY_STRAIN_TICKS = new HashMap<>();
+	// (Burning Body strain ticks tracked in PlayerTickState)
 
 	// ── Ruler tuning constants ────────────────────────────────────────
 	// Madra drain per tick while Ruler is active
@@ -129,11 +117,24 @@ public final class CyclingManager {
 	private static final double RULER_RADIUS = 6.0;
 	// How often Ruler effects tick on nearby enemies (every N ticks)
 	private static final int RULER_EFFECT_INTERVAL = 10; // every 0.5 seconds
-	// Tracks Ruler effect tick counter
-	private static final Map<UUID, Integer> RULER_EFFECT_TICKS = new HashMap<>();
+	// (Ruler effect ticks and Spirit Shift particle ticks tracked in PlayerTickState)
 
-	// Tracks Spirit Shift particle tick counter
-	private static final Map<UUID, Integer> SPIRIT_SHIFT_PARTICLE_TICKS = new HashMap<>();
+	/** Per-player tick state — consolidates 8 HashMaps into 1 lookup per tick. */
+	private static final class PlayerTickState {
+		int envCheckTicks = 0;
+		float cachedEnvBonus = 1.0f;
+		int flightParticleTicks = 0;
+		boolean wasFlyingLastTick = false;
+		double[] cyclingPosition = null;
+		int burningBodyStrainTicks = 0;
+		int rulerEffectTicks = 0;
+		int spiritShiftParticleTicks = 0;
+	}
+	private static final Map<UUID, PlayerTickState> PLAYER_TICK_STATE = new HashMap<>();
+
+	// Performance: throttle sync packets to every 4 ticks (5/sec instead of 20/sec)
+	private static final int SYNC_INTERVAL = 4;
+	private static int syncTickCounter = 0;
 
 	// ── Tick handler ───────────────────────────────────────────────────
 
@@ -141,6 +142,7 @@ public final class CyclingManager {
 		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
 			UUID playerId = player.getUUID();
 			CradlePlayerData data = CradlePlayerData.getOrCreate(playerId);
+			PlayerTickState state = PLAYER_TICK_STATE.computeIfAbsent(playerId, k -> new PlayerTickState());
 
 			// Passive Madra regen for everyone (scales with stage)
 			if (data.getCurrentMadra() < data.getMaxMadra()) {
@@ -164,7 +166,7 @@ public final class CyclingManager {
 
 			// ── Flight tick (Underlord+ / Cloud Hammer Copper+) ─────────
 			boolean canFly = data.canFly();
-			boolean wasFlying = WAS_FLYING_LAST_TICK.getOrDefault(playerId, false);
+			boolean wasFlying = state.wasFlyingLastTick;
 			if (data.isUnderlordFlying()) {
 				boolean currentlyFlying = player.getAbilities().flying;
 
@@ -182,10 +184,9 @@ public final class CyclingManager {
 								"\u00A7cFlight deactivated \u2014 out of Madra!"), true);
 					} else {
 						// Path-colored particles below feet every 5 ticks
-						int pTick = FLIGHT_PARTICLE_TICKS.getOrDefault(playerId, 0) + 1;
-						FLIGHT_PARTICLE_TICKS.put(playerId, pTick);
+						int pTick = ++state.flightParticleTicks;
 						if (pTick >= FLIGHT_PARTICLE_INTERVAL) {
-							FLIGHT_PARTICLE_TICKS.put(playerId, 0);
+							state.flightParticleTicks = 0;
 							((ServerLevel) player.level()).sendParticles(
 									net.minecraft.core.particles.ParticleTypes.END_ROD,
 									player.getX(), player.getY() - 0.5, player.getZ(),
@@ -199,9 +200,9 @@ public final class CyclingManager {
 							MobEffects.SLOW_FALLING, CUSHIONED_LANDING_DURATION, 0, false, true));
 				}
 
-				WAS_FLYING_LAST_TICK.put(playerId, currentlyFlying);
+				state.wasFlyingLastTick = currentlyFlying;
 			} else {
-				WAS_FLYING_LAST_TICK.remove(playerId);
+				state.wasFlyingLastTick = false;
 				if (canFly && !player.isCreative() && !player.isSpectator()) {
 					// Auto-grant flight capability when stage requirement is met
 					enableFlight(player, data);
@@ -251,10 +252,9 @@ public final class CyclingManager {
 					player.noPhysics = true;
 
 					// Ethereal particles every 3 ticks
-					int pTick = SPIRIT_SHIFT_PARTICLE_TICKS.getOrDefault(playerId, 0) + 1;
-					SPIRIT_SHIFT_PARTICLE_TICKS.put(playerId, pTick);
+					int pTick = ++state.spiritShiftParticleTicks;
 					if (pTick >= 3) {
-						SPIRIT_SHIFT_PARTICLE_TICKS.put(playerId, 0);
+						state.spiritShiftParticleTicks = 0;
 						((ServerLevel) player.level()).sendParticles(
 								net.minecraft.core.particles.ParticleTypes.SOUL_FIRE_FLAME,
 								player.getX(), player.getY() + 1.0, player.getZ(),
@@ -297,16 +297,15 @@ public final class CyclingManager {
 
 				if (data.getCurrentMadra() <= 0) {
 					data.setRulerActive(false);
-					RULER_EFFECT_TICKS.remove(playerId);
+					state.rulerEffectTicks = 0;
 					player.displayClientMessage(Component.literal(
 							"\u00A7cRuler deactivated — out of Madra!"
 					), true);
 				} else {
 					// Apply area effects every RULER_EFFECT_INTERVAL ticks
-					int rulerTick = RULER_EFFECT_TICKS.getOrDefault(playerId, 0) + 1;
-					RULER_EFFECT_TICKS.put(playerId, rulerTick);
+					int rulerTick = ++state.rulerEffectTicks;
 					if (rulerTick >= RULER_EFFECT_INTERVAL) {
-						RULER_EFFECT_TICKS.put(playerId, 0);
+						state.rulerEffectTicks = 0;
 						applyRulerEffects(player, data);
 					}
 				}
@@ -323,7 +322,7 @@ public final class CyclingManager {
 				// Check for movement — if player moved, stop cycling
 				// Herald can cycle while moving (body transcends physical limits)
 				if (!canCycleWhileMoving(data)) {
-					double[] startPos = CYCLING_POSITIONS.get(playerId);
+					double[] startPos = state.cyclingPosition;
 					if (startPos != null) {
 						double dx = Math.abs(player.getX() - startPos[0]);
 						double dz = Math.abs(player.getZ() - startPos[1]);
@@ -402,8 +401,19 @@ public final class CyclingManager {
 				}
 			}
 
-			// Send sync packet to client every tick (packet is tiny, ~30 bytes)
-			ServerPlayNetworking.send(player, createSyncPayload(player, data));
+		}
+
+		// Throttle sync to every SYNC_INTERVAL ticks (reduces packet rate by 75%)
+		syncTickCounter++;
+		if (syncTickCounter >= SYNC_INTERVAL) {
+			syncTickCounter = 0;
+			for (ServerPlayer syncPlayer : server.getPlayerList().getPlayers()) {
+				CradlePlayerData syncData = CradlePlayerData.getOrCreate(syncPlayer.getUUID());
+				if (syncData.isCanAdvanceDirty()) {
+					syncData.setCachedCanAdvance(BreakthroughManager.canAdvance(syncPlayer, syncData));
+				}
+				ServerPlayNetworking.send(syncPlayer, createSyncPayload(syncPlayer, syncData));
+			}
 		}
 	}
 
@@ -437,7 +447,8 @@ public final class CyclingManager {
 	 */
 	public static void startCycling(ServerPlayer player, CradlePlayerData data) {
 		data.setActivelyCycling(true);
-		CYCLING_POSITIONS.put(player.getUUID(), new double[]{player.getX(), player.getZ()});
+		PlayerTickState s = PLAYER_TICK_STATE.computeIfAbsent(player.getUUID(), k -> new PlayerTickState());
+		s.cyclingPosition = new double[]{player.getX(), player.getZ()};
 	}
 
 	/**
@@ -447,9 +458,12 @@ public final class CyclingManager {
 	public static void stopCycling(ServerPlayer player, CradlePlayerData data) {
 		data.setActivelyCycling(false);
 		data.setSwordCycling(false);
-		CYCLING_POSITIONS.remove(player.getUUID());
-		ENVIRONMENT_CHECK_TICKS.remove(player.getUUID());
-		CACHED_ENV_BONUS.remove(player.getUUID());
+		PlayerTickState s = PLAYER_TICK_STATE.get(player.getUUID());
+		if (s != null) {
+			s.cyclingPosition = null;
+			s.envCheckTicks = 0;
+			s.cachedEnvBonus = 1.0f;
+		}
 		player.removeEffect(MobEffects.GLOWING);
 	}
 
@@ -473,8 +487,11 @@ public final class CyclingManager {
 	 */
 	public static void disableFlight(ServerPlayer player, CradlePlayerData data) {
 		data.setUnderlordFlying(false);
-		FLIGHT_PARTICLE_TICKS.remove(player.getUUID());
-		WAS_FLYING_LAST_TICK.remove(player.getUUID());
+		PlayerTickState s = PLAYER_TICK_STATE.get(player.getUUID());
+		if (s != null) {
+			s.flightParticleTicks = 0;
+			s.wasFlyingLastTick = false;
+		}
 		if (!player.isCreative() && !player.isSpectator()) {
 			player.getAbilities().mayfly = false;
 			player.getAbilities().flying = false;
@@ -490,7 +507,8 @@ public final class CyclingManager {
 	 */
 	public static void activateEnforcer(ServerPlayer player, CradlePlayerData data) {
 		data.setEnforcerActive(true);
-		BURNING_BODY_STRAIN_TICKS.put(player.getUUID(), 0);
+		PlayerTickState s = PLAYER_TICK_STATE.computeIfAbsent(player.getUUID(), k -> new PlayerTickState());
+		s.burningBodyStrainTicks = 0;
 	}
 
 	/**
@@ -498,7 +516,8 @@ public final class CyclingManager {
 	 */
 	public static void deactivateEnforcer(ServerPlayer player, CradlePlayerData data) {
 		data.setEnforcerActive(false);
-		BURNING_BODY_STRAIN_TICKS.remove(player.getUUID());
+		PlayerTickState s = PLAYER_TICK_STATE.get(player.getUUID());
+		if (s != null) s.burningBodyStrainTicks = 0;
 		removeEnforcerModifiers(player);
 	}
 
@@ -515,10 +534,10 @@ public final class CyclingManager {
 				refreshEffect(player, MobEffects.FIRE_RESISTANCE, 60, 0);
 
 				// Self-damage strain (Blackflame burns its user)
-				int strain = BURNING_BODY_STRAIN_TICKS.getOrDefault(player.getUUID(), 0) + 1;
-				BURNING_BODY_STRAIN_TICKS.put(player.getUUID(), strain);
+				PlayerTickState st = PLAYER_TICK_STATE.get(player.getUUID());
+				int strain = (st != null) ? ++st.burningBodyStrainTicks : 0;
 				if (strain >= BURNING_BODY_STRAIN_INTERVAL) {
-					BURNING_BODY_STRAIN_TICKS.put(player.getUUID(), 0);
+					if (st != null) st.burningBodyStrainTicks = 0;
 					player.hurtServer(player.level(), player.damageSources().magic(), BURNING_BODY_STRAIN_DAMAGE);
 				}
 			}
@@ -586,7 +605,8 @@ public final class CyclingManager {
 	/** Deactivates Herald Spirit Shift, cleaning up all effects and physics. */
 	public static void deactivateSpiritShift(ServerPlayer player, CradlePlayerData data) {
 		data.setSpiritShiftActive(false);
-		SPIRIT_SHIFT_PARTICLE_TICKS.remove(player.getUUID());
+		PlayerTickState s = PLAYER_TICK_STATE.get(player.getUUID());
+		if (s != null) s.spiritShiftParticleTicks = 0;
 		player.removeEffect(MobEffects.INVISIBILITY);
 		player.removeEffect(MobEffects.SPEED);
 		player.removeEffect(MobEffects.FIRE_RESISTANCE);
@@ -789,16 +809,15 @@ public final class CyclingManager {
 	 * Shows an action bar message when the bonus first activates.
 	 */
 	private static float getEnvironmentalBonus(ServerPlayer player, CradlePlayerData data) {
-		UUID id = player.getUUID();
-		int tick = ENVIRONMENT_CHECK_TICKS.getOrDefault(id, 0) + 1;
-		ENVIRONMENT_CHECK_TICKS.put(id, tick);
+		PlayerTickState st = PLAYER_TICK_STATE.computeIfAbsent(player.getUUID(), k -> new PlayerTickState());
+		int tick = ++st.envCheckTicks;
 		if (tick < ENVIRONMENT_CHECK_INTERVAL) {
-			return CACHED_ENV_BONUS.getOrDefault(id, 1.0f);
+			return st.cachedEnvBonus;
 		}
-		ENVIRONMENT_CHECK_TICKS.put(id, 0);
-		float prevBonus = CACHED_ENV_BONUS.getOrDefault(id, 1.0f);
+		st.envCheckTicks = 0;
+		float prevBonus = st.cachedEnvBonus;
 		float bonus = calculateEnvironmentalBonus(player, data);
-		CACHED_ENV_BONUS.put(id, bonus);
+		st.cachedEnvBonus = bonus;
 
 		// Notify when bonus activates (transition from 1.0 to >1.0)
 		if (bonus > 1.0f && prevBonus <= 1.0f) {
@@ -869,7 +888,7 @@ public final class CyclingManager {
 	public static CradleSyncPayload createSyncPayload(ServerPlayer player, CradlePlayerData data) {
 		int baseFlags = CradleSyncPayload.buildFlags(
 				data.isActivelyCycling(),
-				BreakthroughManager.canAdvance(player, data),
+				data.getCachedCanAdvance(),
 				data.isIronBodyActive(),
 				data.isEnforcerActive(),
 				data.isRulerActive(),

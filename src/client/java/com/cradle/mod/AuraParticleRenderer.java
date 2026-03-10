@@ -1,5 +1,6 @@
 package com.cradle.mod;
 
+import java.util.HashMap;
 import java.util.Random;
 
 import net.minecraft.client.Minecraft;
@@ -34,14 +35,14 @@ public final class AuraParticleRenderer {
 	private static final Random RANDOM = new Random();
 
 	// ── Biome aura ripple settings ──
-	private static final int RIPPLE_LINES_PER_TICK = 2;
-	private static final int RIPPLE_PARTICLES_PER_LINE = 6;
+	private static final int RIPPLE_LINES_PER_TICK = 1;
+	private static final int RIPPLE_PARTICLES_PER_LINE = 4;
 	private static final double RIPPLE_MAX_DISTANCE = 14.0;
 	private static final float RIPPLE_PARTICLE_SCALE = 0.4f;
 
 	// ── Source aura emission settings ──
 	private static final int SOURCE_SCAN_RADIUS = 10;
-	private static final int SOURCE_SCANS_PER_TICK = 3;
+	private static final int SOURCE_SCANS_PER_TICK = 1;
 	private static final int SOURCE_PARTICLES = 3;
 	private static final float SOURCE_PARTICLE_SCALE = 0.55f;
 
@@ -55,6 +56,11 @@ public final class AuraParticleRenderer {
 	private static String cachedBiomeName = "";
 	private static int tickCounter = 0;
 
+	// Performance: cache ground levels to avoid repeated block searches
+	private static final HashMap<Long, Integer> groundLevelCache = new HashMap<>();
+	private static int groundCacheTicks = 0;
+	private static final int GROUND_CACHE_CLEAR_INTERVAL = 40; // Clear cache every 2 seconds
+
 	public static void tick(Minecraft client) {
 		LocalPlayer player = client.player;
 		Level level = client.level;
@@ -66,6 +72,13 @@ public final class AuraParticleRenderer {
 		if (!ClientCradleData.copperSightActive) {
 			tickCounter = 0;
 			return;
+		}
+
+		// Clear ground level cache periodically
+		groundCacheTicks++;
+		if (groundCacheTicks >= GROUND_CACHE_CLEAR_INTERVAL) {
+			groundCacheTicks = 0;
+			groundLevelCache.clear();
 		}
 
 		tickCounter++;
@@ -120,8 +133,8 @@ public final class AuraParticleRenderer {
 				double spawnZ = pz + dirZ * dist + dirX * spread;
 
 				// Find ground level at this point
-				double groundY = findGroundLevel(level, spawnX, py, spawnZ);
-				double spawnY = groundY + 0.05 + RANDOM.nextDouble() * 0.15;
+				int groundY = findGroundLevel(level, (int) Math.floor(spawnX), (int) Math.floor(spawnZ), (int) Math.floor(py) + 2);
+				double spawnY = groundY + 1.0 + 0.05 + RANDOM.nextDouble() * 0.15;
 
 				// Velocity: outward along the ground + slight upward drift
 				double speed = 0.015 + RANDOM.nextDouble() * 0.01;
@@ -180,26 +193,22 @@ public final class AuraParticleRenderer {
 		}
 	}
 
-	/**
-	 * Finds the Y level of the topmost solid block at the given XZ position,
-	 * searching downward from the player's Y level. Returns the top of the block.
-	 */
-	private static double findGroundLevel(Level level, double x, double playerY, double z) {
-		int bx = (int) Math.floor(x);
-		int bz = (int) Math.floor(z);
-		int startY = (int) Math.floor(playerY) + 2;
+	private static int findGroundLevel(Level level, int x, int z, int startY) {
+		long key = ((long) x << 32) | (z & 0xFFFFFFFFL);
+		Integer cached = groundLevelCache.get(key);
+		if (cached != null) return cached;
 
-		for (int dy = 0; dy <= GROUND_SEARCH_DEPTH + 4; dy++) {
-			int checkY = startY - dy;
-			BlockPos pos = new BlockPos(bx, checkY, bz);
-			BlockState state = level.getBlockState(pos);
-
-			if (state.blocksMotion()) {
-				return checkY + 1.0;
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, startY, z);
+		int minY = startY - GROUND_SEARCH_DEPTH - 4;
+		for (int y = startY; y >= minY; y--) {
+			pos.setY(y);
+			if (!level.getBlockState(pos).isAir()) {
+				groundLevelCache.put(key, y);
+				return y;
 			}
 		}
-
-		return playerY - 2.0;
+		groundLevelCache.put(key, minY);
+		return minY;
 	}
 
 	/**
