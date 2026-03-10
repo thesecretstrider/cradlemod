@@ -1,14 +1,24 @@
 package com.cradle.mod;
 
 import com.cradle.mod.network.CradleSyncPayload;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
+import net.minecraft.world.entity.Entity;
+
+import java.util.HashMap;
+import java.util.UUID;
 
 /**
  * Client-side cache of the player's Cradle data, updated each tick
  * via the CradleSyncPayload packet from the server.
  *
  * All fields are static because there's only one local player on the client.
+ * Remote player goldsigns are tracked in a separate UUID map for multiplayer rendering.
  */
 public final class ClientCradleData {
+
+	/** Goldsign ordinals for remote players, keyed by their UUID. */
+	private static final HashMap<UUID, Integer> remotePlayerGoldsigns = new HashMap<>();
 
 	public static int level = 0;
 	public static int cyclingXp = 0;
@@ -60,6 +70,7 @@ public final class ClientCradleData {
 		icon = "NONE";
 		copperSightActive = false;
 		goldsignOrdinal = 0;
+		clearRemoteGoldsigns();
 	}
 
 	public static void update(CradleSyncPayload payload) {
@@ -320,6 +331,56 @@ public final class ClientCradleData {
 	 */
 	public static boolean hasGoldsign() {
 		return goldsignOrdinal > 0;
+	}
+
+	// ── Remote player goldsign tracking (multiplayer) ──────────────────
+
+	/**
+	 * Stores a remote player's goldsign ordinal. If the ordinal is 0 (NONE),
+	 * the entry is removed from the map to avoid accumulating stale data.
+	 */
+	public static void setRemotePlayerGoldsign(UUID playerUuid, int goldsignOrd) {
+		if (goldsignOrd == 0) {
+			remotePlayerGoldsigns.remove(playerUuid);
+		} else {
+			remotePlayerGoldsigns.put(playerUuid, goldsignOrd);
+		}
+	}
+
+	/**
+	 * Clears all remote player goldsign data. Called on disconnect via {@link #reset()}.
+	 */
+	public static void clearRemoteGoldsigns() {
+		remotePlayerGoldsigns.clear();
+	}
+
+	/**
+	 * Returns the goldsign ordinal for the player represented by the given render state.
+	 * For the local player, returns the cached {@link #goldsignOrdinal}.
+	 * For remote players, looks up their UUID in the remote goldsign map.
+	 *
+	 * @return goldsign ordinal (0 = NONE)
+	 */
+	public static int getGoldsignForPlayer(AvatarRenderState state) {
+		Minecraft mc = Minecraft.getInstance();
+
+		// Local player: use the directly-synced goldsign ordinal
+		if (mc.player != null && state.id == mc.player.getId()) {
+			return goldsignOrdinal;
+		}
+
+		// Remote player: resolve entity ID -> UUID -> map lookup
+		if (mc.level != null) {
+			Entity entity = mc.level.getEntity(state.id);
+			if (entity != null) {
+				Integer ordinal = remotePlayerGoldsigns.get(entity.getUUID());
+				if (ordinal != null) {
+					return ordinal;
+				}
+			}
+		}
+
+		return 0; // No goldsign
 	}
 
 	/**

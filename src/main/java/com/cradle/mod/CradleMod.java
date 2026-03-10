@@ -26,6 +26,7 @@ import com.cradle.mod.network.BranchAbilityPayload;
 import com.cradle.mod.network.ChooseAbilityPayload;
 import com.cradle.mod.network.AbilityLoadoutSyncPayload;
 import com.cradle.mod.network.ToggleCopperSightPayload;
+import com.cradle.mod.network.GoldsignBroadcastPayload;
 import com.cradle.mod.ability.AbilityExecutor;
 import com.cradle.mod.ability.AbilityDefinition;
 import com.cradle.mod.ability.AbilityRegistry;
@@ -113,6 +114,7 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playS2C().register(DuelInviteReceivedPayload.TYPE, DuelInviteReceivedPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playS2C().register(DuelEndPayload.TYPE, DuelEndPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playS2C().register(AbilityLoadoutSyncPayload.TYPE, AbilityLoadoutSyncPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playS2C().register(GoldsignBroadcastPayload.TYPE, GoldsignBroadcastPayload.STREAM_CODEC);
 
 		// Register networking packets (client -> server)
 		PayloadTypeRegistry.playC2S().register(ChoosePathPayload.TYPE, ChoosePathPayload.STREAM_CODEC);
@@ -143,6 +145,13 @@ public class CradleMod implements ModInitializer {
 			}
 			if (!data.hasChosenPath()) {
 				ServerPlayNetworking.send(player, new OpenPathSelectionPayload());
+			}
+			// Send all existing goldsigns to the joining player
+			for (Map.Entry<UUID, CradlePlayerData> entry : CradlePlayerData.getAll().entrySet()) {
+				if (entry.getValue().getGoldsign() != CradlePlayerData.Goldsign.NONE) {
+					ServerPlayNetworking.send(player, new GoldsignBroadcastPayload(
+							entry.getKey().toString(), entry.getValue().getGoldsign().ordinal()));
+				}
 			}
 		});
 
@@ -984,6 +993,19 @@ public class CradleMod implements ModInitializer {
 				loadout.toJsonString(),
 				AbilityLoadoutSyncPayload.buildActiveFlags(slotActive)
 		));
+	}
+
+	/**
+	 * Broadcasts a player's goldsign to all players in the same level.
+	 * Called when a goldsign changes (Remnant absorption) and on player join.
+	 */
+	public static void broadcastGoldsign(ServerPlayer player, CradlePlayerData data) {
+		GoldsignBroadcastPayload payload = new GoldsignBroadcastPayload(
+				player.getUUID().toString(), data.getGoldsign().ordinal());
+		ServerLevel serverLevel = (ServerLevel) player.level();
+		for (ServerPlayer other : serverLevel.players()) {
+			ServerPlayNetworking.send(other, payload);
+		}
 	}
 
 	// ── Persistence ──────────────────────────────────────────────────

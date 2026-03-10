@@ -27,6 +27,7 @@ public final class RemnantAbilityAI {
 	private final Set<Integer> activeToggleSlots = new HashSet<>();
 	private final Map<Integer, Integer> rulerTickCounters = new HashMap<>();
 	private int decisionTicks = 0;
+	private boolean firstAttack = true;
 	private final int abilityCount;
 
 	public RemnantAbilityAI(RemnantEntity remnant) {
@@ -50,9 +51,9 @@ public final class RemnantAbilityAI {
 		// Tick active enforcers/rulers (drain madra)
 		tickActiveAbilities();
 
-		// Decision tick: pick an ability to use
+		// Decision tick: pick an ability to use (first decision is immediate)
 		decisionTicks++;
-		if (decisionTicks >= DECISION_INTERVAL) {
+		if (decisionTicks >= DECISION_INTERVAL || firstAttack) {
 			decisionTicks = 0;
 			makeAbilityDecision(target);
 		}
@@ -65,8 +66,12 @@ public final class RemnantAbilityAI {
 		double distance = remnant.distanceTo(target);
 
 		// Determine preferred type based on range
+		// First attack is always a striker (opening salvo)
 		AbilityType preferred;
-		if (distance < CLOSE_RANGE) {
+		if (firstAttack) {
+			preferred = AbilityType.STRIKER;
+			firstAttack = false;
+		} else if (distance < CLOSE_RANGE) {
 			preferred = AbilityType.ENFORCER;
 		} else if (distance < MID_RANGE) {
 			preferred = AbilityType.STRIKER;

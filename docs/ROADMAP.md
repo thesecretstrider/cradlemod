@@ -80,6 +80,8 @@ Brainstorms not committed to — captured for future reference.
 - [ ] **Aura Density Zones** — Special high-aura areas for faster cycling (power-leveling spots)
 - [ ] **Truegold Mastery Trial** — Prove mastery before entering Lord realm
 - [ ] **Soulfire Body Reforging Visuals** — Each Lord advancement triggers visible upgrade (particles, glow, stat boosts)
+- [ ] **Goldsign Growth Animation** — When advancing to Gold, goldsign visually grows/emerges over a few seconds (e.g., metallic hair sprouting from the player's head)
+- [ ] **Cycling While Using Techniques** — Lore-accurate: must be cycling to use abilities (you cycle madra to power techniques), but can't *gain* madra while using moves or sprinting. Cycling only stops entirely when sprinting. Simplifies the many cycling techniques from the books into one unified mechanic
 
 ---
 
@@ -87,3 +89,7 @@ Brainstorms not committed to — captured for future reference.
 
 - [ ] Dreadbeast Sheep disabled (incomplete textures, crash on load)
 - [ ] Sheep hostile check commented out in `isHostile()`
+- [ ] **Skill tree path validation broken** — Says "move is not from your path" when selecting abilities that should be available
+- [ ] **Blackflame self-burn at Underlord+** — Burning Body still damages the user at Lord realm; should stop or heavily reduce at Underlord+
+- [ ] **Remnant striker damage too high** — Weakest striker does ~5 hearts + burn; needs damage scaling tuned down for remnants
+- [ ] **Slow Falling replacement** — Remove slow falling effect, replace with no-fall-damage only (consider cloud particle at feet instead)

@@ -369,7 +369,14 @@
       "Bash(\"C:\\\\Program Files\\\\Java\\\\jdk-21\\\\bin\\\\javap\" -classpath \"C:\\\\Users\\\\aaron\\\\.gradle\\\\caches\\\\fabric-loom\\\\minecraftMaven\\\\net\\\\minecraft\\\\minecraft-common\\\\1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2\\\\minecraft-common-1.21.11-loom.mappings.1_21_11.layered+hash.2198-v2.jar\" net.minecraft.client.player.LocalPlayer)",
       "mcp__48bafe2c-81b7-4077-a4c2-25d77e7928fa__notion-create-pages",
       "WebFetch(domain:abidan-archives.fandom.com)",
-      "mcp__48bafe2c-81b7-4077-a4c2-25d77e7928fa__notion-update-page"
+      "mcp__48bafe2c-81b7-4077-a4c2-25d77e7928fa__notion-update-page",
+      "Bash(grep -n \"remnantDeathCount\\\\|incrementRemnantDeathCount\" C:/Users/aaron/Projects/cradlemod/src/main/java/com/cradle/mod/*.java)",
+      "WebFetch(domain:wiki.abidanarchive.com)",
+      "Bash(python -c \"from PIL import Image; print\\(''Pillow available''\\)\")",
+      "Bash(/c/Users/aaron/AppData/Local/Microsoft/WindowsApps/python.exe --version)",
+      "Bash(/c/Users/aaron/.vscode/extensions/redhat.java-1.53.0-win32-x64/jre/21.0.10-win32-x86_64/bin/java -version)",
+      "Bash(/c/Users/aaron/.vscode/extensions/redhat.java-1.53.0-win32-x64/jre/21.0.10-win32-x86_64/bin/javac generate_goldsign.java)",
+      "Bash(/c/Users/aaron/.vscode/extensions/redhat.java-1.53.0-win32-x64/jre/21.0.10-win32-x86_64/bin/java generate_goldsign)"
     ]
   }
 }

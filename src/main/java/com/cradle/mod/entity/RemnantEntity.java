@@ -347,6 +347,9 @@ public class RemnantEntity extends Monster {
 		CradlePlayerData.Goldsign goldsign = CradlePlayerData.getGoldsignForPath(data.getChosenPath());
 		data.setGoldsign(goldsign);
 
+		// Broadcast goldsign to all players in the same level
+		CradleMod.broadcastGoldsign(player, data);
+
 		// Breakthrough to Low Gold
 		BreakthroughManager.performRemnantBreakthrough(player, data);
 

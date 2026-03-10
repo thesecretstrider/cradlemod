@@ -1,6 +1,7 @@
 package com.cradle.mod;
 
 import com.cradle.mod.network.CradleSyncPayload;
+import com.cradle.mod.network.GoldsignBroadcastPayload;
 import com.cradle.mod.network.OpenInfoScreenPayload;
 import com.cradle.mod.network.OpenPathSelectionPayload;
 import com.cradle.mod.network.ToggleIronBodyPayload;
@@ -14,6 +15,7 @@ import com.cradle.mod.network.DuelEndPayload;
 import com.cradle.mod.network.AbilityLoadoutSyncPayload;
 import com.cradle.mod.network.UseAbilityPayload;
 import com.cradle.mod.network.UseChargedAbilityPayload;
+import com.cradle.mod.render.GoldsignFeatureRenderer;
 import com.cradle.mod.block.CradleBlocks;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.RemnantRenderer;
@@ -23,9 +25,11 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.rendering.v1.BlockRenderLayerMap;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+import net.minecraft.client.renderer.entity.player.AvatarRenderer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -33,6 +37,8 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
+
+import java.util.UUID;
 
 public class CradleModClient implements ClientModInitializer {
 	// (Welcome overlay system removed — replaced by WelcomeScreen)
@@ -151,6 +157,15 @@ public class CradleModClient implements ClientModInitializer {
 		EntityRendererRegistry.register(CradleEntities.STRIKER_PROJECTILE, StrikerProjectileRenderer::new);
 		EntityRendererRegistry.register(CradleEntities.REMNANT, RemnantRenderer::new);
 
+		// ── Register goldsign feature renderer on player renderers ───
+		LivingEntityFeatureRendererRegistrationCallback.EVENT.register(
+				(entityType, entityRenderer, registrationHelper, context) -> {
+					if (entityRenderer instanceof AvatarRenderer<?> avatarRenderer) {
+						registrationHelper.register(new GoldsignFeatureRenderer(avatarRenderer));
+					}
+				}
+		);
+
 		// ── Reset client data when disconnecting ─────────────────────
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
 			ClientCradleData.reset();
@@ -171,6 +186,14 @@ public class CradleModClient implements ClientModInitializer {
 		ClientPlayNetworking.registerGlobalReceiver(AbilityLoadoutSyncPayload.TYPE,
 				(payload, context) -> {
 					ClientLoadoutData.update(payload);
+				}
+		);
+
+		// ── Networking: receive goldsign broadcast packet ─────────────
+		ClientPlayNetworking.registerGlobalReceiver(GoldsignBroadcastPayload.TYPE,
+				(payload, context) -> {
+					ClientCradleData.setRemotePlayerGoldsign(
+							UUID.fromString(payload.playerUuid()), payload.goldsignOrdinal());
 				}
 		);
 
