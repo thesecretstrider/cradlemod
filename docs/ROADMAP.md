@@ -13,6 +13,16 @@ These can be implemented right now with no new art needed.
 - [ ] **Archlord Lore Hints** — Teaser messages about Icons and spirit-body merge
 - [ ] **Herald Advancement Lore** — Hint messages at Archlord about merging spirit with body
 - [ ] **Dreadgod Boss Logic** — Massive boss mob AI/behavior (prototype without final textures)
+- [ ] **Blackflame Corruption** — Gold+ Blackflame players accumulate Corruption (10 tiers) from abilities and cycling. +15% damage per tier (up to +150%). Screen darkens from edges inward. At tier X: blackout, teleport to spawn (no death screen, keep items, no Remnant), 15-20 block crater at location. Purged by Vital Fruit Juice (-2 tiers) or Hollow King cleansing ability. See `docs/plans/2026-03-15-blackflame-corruption-design.md`
+- [ ] **Vital Fruit Juice** — New item: water bottle + vital fruit. Clears 2 corruption tiers. Primary solo purge method for Blackflame players
+- [ ] **Fruit Farming** — Spirit fruits and vital fruits can be planted (place fruit → grows into bush). Farmed bushes drop 1-3 fruits; wild bushes still drop 1
+- [ ] **Sound Effects** — Ability cast sounds, cycling ambient loop, breakthrough fanfare, duel start/end. Repurpose vanilla SoundEvents. Silent combat feels broken for public release
+- [ ] **Server Config File** — Ability damage multiplier, cycling speed, enable/disable duels, enable/disable PvP ability damage, Remnant spawn chance, corruption rate. Server operators expect configurability
+- [ ] **Dead Code Cleanup** — Remove orphaned payloads (UseEnforcerPayload, UseStrikerPayload, UseRulerPayload), unused `remnantDeathCount` field, empty duel payload handlers
+- [ ] **Mod Compatibility** — Graceful failure if mixins conflict (XP bar, combat events). Document known incompatibilities. Fabric mods are expected to coexist
+- [ ] **Advancement Integration** — Tie Cradle milestones to vanilla advancement system (choose path, reach Copper, absorb Remnant, reach Gold, win a duel). Free discoverability via pause menu
+- [ ] **Death Screen Remnant Info** — Custom death message: "Your Remnant lingers at [coordinates]" when dying at Copper+. Players need to know to go back within 5 minutes
+- [ ] **Tooltip Polish** — All mod items (spirit stones, iron body crystals, revelation items, spirit/vital fruits) need proper tooltips explaining what they do
 
 ---
 
@@ -29,6 +39,7 @@ Designed but blocked on custom art/models.
 - [ ] **Badges** — Craftable, appear on character model + nametag, show path/rank
 - [x] **Goldsigns** — ~~Visual cosmetics per path at Lowgold~~ (Done in Save 45)
 - [ ] **Custom Duel Arenas** — 15 path-matchup designs (structure blocks)
+- [ ] **Ancestral Trees** — Ancient trees that come alive and attack. Chopping one with an axe while it's dormant summons Remnants that attack. Custom tree model/texture + hostile entity form. *Needs tree model, animated hostile form, and bark textures*
 
 ---
 
@@ -82,6 +93,11 @@ Brainstorms not committed to — captured for future reference.
 - [ ] **Soulfire Body Reforging Visuals** — Each Lord advancement triggers visible upgrade (particles, glow, stat boosts)
 - [ ] **Goldsign Growth Animation** — When advancing to Gold, goldsign visually grows/emerges over a few seconds (e.g., metallic hair sprouting from the player's head)
 - [ ] **Cycling While Using Techniques** — Lore-accurate: must be cycling to use abilities (you cycle madra to power techniques), but can't *gain* madra while using moves or sprinting. Cycling only stops entirely when sprinting. Simplifies the many cycling techniques from the books into one unified mechanic
+- [ ] **In-Game Guidebook** — Craftable book item explaining paths, cycling, advancement, abilities. Alternative to JEI/REI integration for player onboarding
+- [ ] **Data Pack Support** — Ability definitions, cycling rates, Remnant spawn chances overridable via data pack for modpack creators
+- [ ] **Duel Spectator Mode** — Allow non-participants to watch duels. Spectator camera within arena bounds
+- [ ] **Accessibility — Color-Blind Support** — Shape/icon indicators alongside color for path differentiation (madra bar, ability slots, particles)
+- [ ] **Little Blue Sacred Beast** — Pure madra companion that passively cleanses Blackflame corruption. Tied to Sacred Beast + Contracts systems
 
 ---
 
