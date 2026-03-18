@@ -30,6 +30,14 @@ import com.cradle.mod.network.ChooseCharacterPayload;
 import com.cradle.mod.network.GoldsignBroadcastPayload;
 import com.cradle.mod.network.OpenCharacterSelectionPayload;
 import com.cradle.mod.network.OpenDialoguePayload;
+import com.cradle.mod.network.DialogueNodePayload;
+import com.cradle.mod.network.DialogueResponsePayload;
+import com.cradle.mod.story.dialogue.DialogueLoader;
+import com.cradle.mod.story.dialogue.DialogueTree;
+import com.cradle.mod.story.dialogue.DialogueNode;
+import com.cradle.mod.story.dialogue.DialogueOption;
+import com.cradle.mod.story.dialogue.DialogueSessionTracker;
+import com.cradle.mod.entity.StoryNpcEntity;
 import com.cradle.mod.ability.AbilityExecutor;
 import com.cradle.mod.ability.AbilityDefinition;
 import com.cradle.mod.ability.AbilityRegistry;
@@ -132,6 +140,7 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playS2C().register(GoldsignBroadcastPayload.TYPE, GoldsignBroadcastPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playS2C().register(OpenCharacterSelectionPayload.TYPE, OpenCharacterSelectionPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playS2C().register(OpenDialoguePayload.TYPE, OpenDialoguePayload.STREAM_CODEC);
+		PayloadTypeRegistry.playS2C().register(DialogueNodePayload.TYPE, DialogueNodePayload.STREAM_CODEC);
 
 		// Register networking packets (client -> server)
 		PayloadTypeRegistry.playC2S().register(ChoosePathPayload.TYPE, ChoosePathPayload.STREAM_CODEC);
@@ -150,6 +159,7 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(ChooseAbilityPayload.TYPE, ChooseAbilityPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(ToggleCopperSightPayload.TYPE, ToggleCopperSightPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(ChooseCharacterPayload.TYPE, ChooseCharacterPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(DialogueResponsePayload.TYPE, DialogueResponsePayload.STREAM_CODEC);
 
 		// Send initial data sync when a player joins, and open path selection if needed
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
@@ -821,6 +831,57 @@ public class CradleMod implements ModInitializer {
 			sync(player, data);
 		});
 
+		// Handle dialogue response from client
+		ServerPlayNetworking.registerGlobalReceiver(DialogueResponsePayload.TYPE,
+			(payload, context) -> {
+				ServerPlayer player = context.player();
+				if (!(player.level().getEntity(payload.entityId()) instanceof StoryNpcEntity npc)) return;
+
+				String npcId = npc.getNpcId();
+				DialogueTree tree = DialogueLoader.getTree(npcId);
+				if (tree == null) return;
+
+				// Track current dialogue node per player
+				String currentNodeId = DialogueSessionTracker.getCurrentNode(player.getUUID(), npcId);
+				if (currentNodeId == null) currentNodeId = tree.startNodeId();
+
+				DialogueNode currentNode = tree.getNode(currentNodeId);
+				if (currentNode == null) return;
+
+				// Validate option index
+				if (payload.optionIndex() < 0 || payload.optionIndex() >= currentNode.options().size()) return;
+
+				DialogueOption chosen = currentNode.options().get(payload.optionIndex());
+
+				// Process option effects
+				if (chosen.setFlag() != null) {
+					// TODO: Set story flag when story flag system is built
+				}
+
+				// Navigate to next node
+				if (chosen.nextNodeId() == null) {
+					// End of dialogue
+					DialogueSessionTracker.clearSession(player.getUUID(), npcId);
+					return;
+				}
+
+				DialogueNode nextNode = tree.getNode(chosen.nextNodeId());
+				if (nextNode == null) {
+					DialogueSessionTracker.clearSession(player.getUUID(), npcId);
+					return;
+				}
+
+				// Send next node to client
+				DialogueSessionTracker.setCurrentNode(player.getUUID(), npcId, nextNode.id());
+				java.util.List<String> labels = nextNode.options().stream()
+					.map(DialogueOption::label)
+					.collect(java.util.stream.Collectors.toList());
+				boolean hasMore = nextNode.options().stream().anyMatch(o -> o.nextNodeId() != null);
+				ServerPlayNetworking.send(player, new DialogueNodePayload(
+					payload.entityId(), nextNode.speakerName(), nextNode.text(), labels, hasMore));
+			}
+		);
+
 		// Sword-stabbing cycling: right-click soft block with sword (Endless Sword / Stellar Spear)
 		UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
 			if (world.isClientSide() || !(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
@@ -885,6 +946,7 @@ public class CradleMod implements ModInitializer {
 			if (overworld.getChunkSource().getGenerator() instanceof SacredValleyChunkGenerator) {
 				GameModeManager.setMode(GameModeManager.CradleGameMode.CRADLE);
 				LOGGER.info("Detected Sacred Valley chunk generator — Cradle mode activated.");
+				DialogueLoader.loadAll();
 				StructureGenerator.generateIfNeeded(overworld);
 				NpcSpawnManager.spawnIfNeeded(overworld);
 			}
@@ -895,6 +957,7 @@ public class CradleMod implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
 			DuelManager.clearAll();
 			AbilityExecutor.clearAll();
+			DialogueSessionTracker.clearAll();
 			autoSave(server);
 			LOGGER.info("Saved Cradle player data for {} players on shutdown.", CradlePlayerData.getAll().size());
 			// Clear in-memory data so it doesn't carry over to the next world

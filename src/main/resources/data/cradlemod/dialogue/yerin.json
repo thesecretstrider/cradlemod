@@ -1,0 +1,62 @@
+{
+    "npcId": "yerin",
+    "startNodeId": "greeting",
+    "nodes": {
+        "greeting": {
+            "speakerName": "Yerin",
+            "text": "What do you want? I'm busy training.",
+            "options": [
+                { "label": "Who are you?", "nextNodeId": "about_self" },
+                { "label": "What are you training for?", "nextNodeId": "about_training" },
+                { "label": "Sorry to bother you.", "nextNodeId": null }
+            ]
+        },
+        "about_self": {
+            "speakerName": "Yerin",
+            "text": "Name's Yerin. My master brought me to this valley to train. He was... he's gone now. I'm on the Path of the Endless Sword. Every part of me is a weapon.",
+            "options": [
+                { "label": "I'm sorry about your master.", "nextNodeId": "about_master" },
+                { "label": "The Endless Sword?", "nextNodeId": "about_path" },
+                { "label": "I'll leave you to it.", "nextNodeId": null }
+            ]
+        },
+        "about_training": {
+            "speakerName": "Yerin",
+            "text": "Getting stronger. Always getting stronger. That's the only way to survive out there. This valley is... safe, I suppose. But it won't last.",
+            "options": [
+                { "label": "Survive what?", "nextNodeId": "about_danger" },
+                { "label": "Good luck.", "nextNodeId": null }
+            ]
+        },
+        "about_master": {
+            "speakerName": "Yerin",
+            "text": "The Sage of the Endless Sword. Strongest person I ever knew. He could cut anything with a thought. A Dreadgod came, and even he... well. I carry his sword now.",
+            "options": [
+                { "label": "A Dreadgod?", "nextNodeId": "about_danger" },
+                { "label": "I'm sorry.", "nextNodeId": null }
+            ]
+        },
+        "about_path": {
+            "speakerName": "Yerin",
+            "text": "Sword madra. Everything is a blade \u2014 my arms, my spirit, the air itself. My master's Goldsign was six sword-arms of silver madra sprouting from his back. One day, mine will be the same.",
+            "options": [
+                { "label": "That sounds powerful.", "nextNodeId": null }
+            ]
+        },
+        "about_danger": {
+            "speakerName": "Yerin",
+            "text": "Dreadgods. Monsters of legend that roam the world beyond this valley. Sacred beasts as tall as mountains. The world outside Sacred Valley is nothing like what you know here. Everything is bigger, stronger, and far more dangerous.",
+            "options": [
+                { "label": "That's terrifying.", "nextNodeId": null },
+                { "label": "I want to see it someday.", "nextNodeId": "ambition" }
+            ]
+        },
+        "ambition": {
+            "speakerName": "Yerin",
+            "text": "Heh. You've got guts, I'll give you that. Keep training, keep cycling. Maybe one day you'll be strong enough to leave this valley.",
+            "options": [
+                { "label": "I will.", "nextNodeId": null }
+            ]
+        }
+    }
+}

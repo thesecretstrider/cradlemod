@@ -1,0 +1,79 @@
+{
+    "npcId": "elder_whisper",
+    "startNodeId": "greeting",
+    "nodes": {
+        "greeting": {
+            "speakerName": "Elder Whisper",
+            "text": "Young one. I sense you have questions about the sacred arts.",
+            "options": [
+                { "label": "Tell me about cycling.", "nextNodeId": "about_cycling" },
+                { "label": "What is this valley?", "nextNodeId": "about_valley" },
+                { "label": "What are the sacred arts?", "nextNodeId": "about_arts" },
+                { "label": "Goodbye.", "nextNodeId": null }
+            ]
+        },
+        "about_cycling": {
+            "speakerName": "Elder Whisper",
+            "text": "Cycling is the foundation of all sacred arts. Through cycling, you draw vital aura into your body and refine it into madra. Focus your mind, and the aura will respond. Press C to begin cycling.",
+            "options": [
+                { "label": "How do I get stronger?", "nextNodeId": "about_advancement" },
+                { "label": "Thank you, Elder.", "nextNodeId": null }
+            ]
+        },
+        "about_valley": {
+            "speakerName": "Elder Whisper",
+            "text": "This is Sacred Valley, isolated from the world beyond by the mountains that ring our home. Seven great factions call this valley home, though none have advanced beyond Jade in generations.",
+            "options": [
+                { "label": "Why can't anyone advance past Jade?", "nextNodeId": "about_suppression" },
+                { "label": "Tell me about the factions.", "nextNodeId": "about_factions" },
+                { "label": "I see. Thank you.", "nextNodeId": null }
+            ]
+        },
+        "about_arts": {
+            "speakerName": "Elder Whisper",
+            "text": "The sacred arts are divided into four branches: Enforcer arts strengthen your body, Striker arts project madra outward as attacks, Ruler arts control the aura around you, and Forger arts create constructs of solid madra.",
+            "options": [
+                { "label": "Tell me about cycling.", "nextNodeId": "about_cycling" },
+                { "label": "Fascinating. Thank you.", "nextNodeId": null }
+            ]
+        },
+        "about_advancement": {
+            "speakerName": "Elder Whisper",
+            "text": "Advancement follows a Path. You begin at Foundation, then progress to Copper, Iron, Jade, and beyond. Each stage requires accumulating sufficient madra through cycling. An Iron body can be forged during the transition to Iron \u2014 choose wisely, for the body cannot be changed.",
+            "options": [
+                { "label": "What Iron bodies are there?", "nextNodeId": "about_iron_bodies" },
+                { "label": "Thank you for the guidance.", "nextNodeId": null }
+            ]
+        },
+        "about_suppression": {
+            "speakerName": "Elder Whisper",
+            "text": "There is a... suppression field over this valley. It prevents advancement beyond a certain point. The source lies deep beneath the valley, older than any faction. But that is a mystery for another time.",
+            "options": [
+                { "label": "I understand.", "nextNodeId": null }
+            ]
+        },
+        "about_factions": {
+            "speakerName": "Elder Whisper",
+            "text": "The Wei clan, to which you belong, practices no single Path but studies all. Heaven's Glory to the southwest hoards power and relics. The Holy Wind school to the north focuses on speed and movement. Fallen Leaf, Golden Sword, the Kazan clan, and the Li clan each have their own strengths.",
+            "options": [
+                { "label": "Tell me more about cycling.", "nextNodeId": "about_cycling" },
+                { "label": "Thank you, Elder.", "nextNodeId": null }
+            ]
+        },
+        "about_iron_bodies": {
+            "speakerName": "Elder Whisper",
+            "text": "Three Iron bodies are practiced in Sacred Valley. The Bloodforged Iron body grants powerful regeneration. The Steelborn Iron body hardens you against damage. The Raindrop Iron body lets you move with fluid grace, dodging attacks instinctively.",
+            "options": [
+                { "label": "How do I choose one?", "nextNodeId": "choose_iron" },
+                { "label": "Thank you.", "nextNodeId": null }
+            ]
+        },
+        "choose_iron": {
+            "speakerName": "Elder Whisper",
+            "text": "When you reach the peak of Copper, seek out the iron body crystals scattered throughout the valley. Absorbing one will forge your iron body during advancement. But beware \u2014 you may only choose once.",
+            "options": [
+                { "label": "I will remember.", "nextNodeId": null }
+            ]
+        }
+    }
+}

@@ -24,8 +24,15 @@ import net.minecraft.world.level.storage.ValueOutput;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import com.cradle.mod.entity.ai.WaypointWanderGoal;
 import com.cradle.mod.network.OpenDialoguePayload;
+import com.cradle.mod.network.DialogueNodePayload;
+import com.cradle.mod.story.dialogue.DialogueLoader;
+import com.cradle.mod.story.dialogue.DialogueTree;
+import com.cradle.mod.story.dialogue.DialogueNode;
+import com.cradle.mod.story.dialogue.DialogueOption;
+import com.cradle.mod.story.dialogue.DialogueSessionTracker;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Invulnerable, persistent NPC entity for story mode.
@@ -110,6 +117,20 @@ public class StoryNpcEntity extends PathfinderMob {
 			if (player instanceof ServerPlayer serverPlayer) {
 				ServerPlayNetworking.send(serverPlayer,
 						new OpenDialoguePayload(this.getNpcId(), this.getId()));
+				// Send first dialogue node immediately
+				DialogueTree tree = DialogueLoader.getTree(this.getNpcId());
+				if (tree != null) {
+					DialogueNode startNode = tree.getStartNode();
+					if (startNode != null) {
+						DialogueSessionTracker.setCurrentNode(serverPlayer.getUUID(), this.getNpcId(), startNode.id());
+						List<String> labels = startNode.options().stream()
+							.map(opt -> opt.label())
+							.collect(Collectors.toList());
+						boolean hasMore = startNode.options().stream().anyMatch(o -> o.nextNodeId() != null);
+						ServerPlayNetworking.send(serverPlayer, new DialogueNodePayload(
+							this.getId(), startNode.speakerName(), startNode.text(), labels, hasMore));
+					}
+				}
 			}
 		}
 		return InteractionResult.SUCCESS;
