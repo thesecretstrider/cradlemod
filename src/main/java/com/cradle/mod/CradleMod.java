@@ -29,6 +29,7 @@ import com.cradle.mod.network.ToggleCopperSightPayload;
 import com.cradle.mod.network.ChooseCharacterPayload;
 import com.cradle.mod.network.GoldsignBroadcastPayload;
 import com.cradle.mod.network.OpenCharacterSelectionPayload;
+import com.cradle.mod.network.OpenDialoguePayload;
 import com.cradle.mod.ability.AbilityExecutor;
 import com.cradle.mod.ability.AbilityDefinition;
 import com.cradle.mod.ability.AbilityRegistry;
@@ -129,6 +130,7 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playS2C().register(AbilityLoadoutSyncPayload.TYPE, AbilityLoadoutSyncPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playS2C().register(GoldsignBroadcastPayload.TYPE, GoldsignBroadcastPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playS2C().register(OpenCharacterSelectionPayload.TYPE, OpenCharacterSelectionPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playS2C().register(OpenDialoguePayload.TYPE, OpenDialoguePayload.STREAM_CODEC);
 
 		// Register networking packets (client -> server)
 		PayloadTypeRegistry.playC2S().register(ChoosePathPayload.TYPE, ChoosePathPayload.STREAM_CODEC);

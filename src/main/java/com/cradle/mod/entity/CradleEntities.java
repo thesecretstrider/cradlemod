@@ -51,9 +51,30 @@ public final class CradleEntities {
 							.build(REMNANT_KEY)
 			);
 
+	// ── Story NPC Entity ─────────────────────────────────────────────
+
+	public static final ResourceKey<EntityType<?>> STORY_NPC_KEY =
+			ResourceKey.create(Registries.ENTITY_TYPE,
+					Identifier.fromNamespaceAndPath("cradlemod", "story_npc"));
+
+	public static final EntityType<StoryNpcEntity> STORY_NPC =
+			Registry.register(
+					BuiltInRegistries.ENTITY_TYPE,
+					STORY_NPC_KEY,
+					EntityType.Builder.<StoryNpcEntity>of(
+									StoryNpcEntity::new,
+									MobCategory.CREATURE
+							)
+							.sized(0.6f, 1.8f)
+							.clientTrackingRange(8)
+							.updateInterval(3)
+							.build(STORY_NPC_KEY)
+			);
+
 	public static void register() {
 		// Static init triggers entity type registration.
 		// Register mob attributes for living entities.
 		FabricDefaultAttributeRegistry.register(REMNANT, RemnantEntity.createRemnantAttributes());
+		FabricDefaultAttributeRegistry.register(STORY_NPC, StoryNpcEntity.createNpcAttributes());
 	}
 }
