@@ -35,6 +35,10 @@ import com.cradle.mod.ability.AbilityRegistry;
 import com.cradle.mod.ability.PlayerLoadout;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.story.GameModeManager;
+import com.cradle.mod.worldgen.SacredValleyChunkGenerator;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerEntityCombatEvents;
@@ -108,6 +112,10 @@ public class CradleMod implements ModInitializer {
 		// Register worldgen (bush spawning) and loot table modifications (Spirit Stone in chests)
 		CradleWorldGen.register();
 		CradleLootTables.register();
+		// Register custom chunk generator for Sacred Valley (Cradle mode)
+		Registry.register(BuiltInRegistries.CHUNK_GENERATOR,
+				Identifier.fromNamespaceAndPath("cradlemod", "sacred_valley"),
+				SacredValleyChunkGenerator.CODEC);
 
 		// Register networking packets (server -> client)
 		PayloadTypeRegistry.playS2C().register(CradleSyncPayload.TYPE, CradleSyncPayload.STREAM_CODEC);
@@ -853,6 +861,15 @@ public class CradleMod implements ModInitializer {
 			} else {
 				LOGGER.info("No existing Cradle player data found, starting fresh.");
 				GameModeManager.reset();
+			}
+		});
+
+		// Auto-detect Cradle mode from the overworld chunk generator
+		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+			ServerLevel overworld = server.overworld();
+			if (overworld.getChunkSource().getGenerator() instanceof SacredValleyChunkGenerator) {
+				GameModeManager.setMode(GameModeManager.CradleGameMode.CRADLE);
+				LOGGER.info("Detected Sacred Valley chunk generator — Cradle mode activated.");
 			}
 		});
 
