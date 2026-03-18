@@ -13,6 +13,8 @@ import com.cradle.mod.network.UseHeraldPayload;
 import com.cradle.mod.network.OpenIconSelectionPayload;
 import com.cradle.mod.network.DuelInviteReceivedPayload;
 import com.cradle.mod.network.DuelEndPayload;
+import com.cradle.mod.network.OpenDialoguePayload;
+import com.cradle.mod.network.DialogueNodePayload;
 import com.cradle.mod.network.AbilityLoadoutSyncPayload;
 import com.cradle.mod.network.UseAbilityPayload;
 import com.cradle.mod.network.UseChargedAbilityPayload;
@@ -256,6 +258,29 @@ public class CradleModClient implements ClientModInitializer {
 				(payload, context) -> {
 					// Server already handles titles and chat; this payload can be used
 					// for future client-side stat display or duel history screen
+				}
+		);
+
+		// ── Networking: handle dialogue payloads ─────────────────────
+		ClientPlayNetworking.registerGlobalReceiver(OpenDialoguePayload.TYPE,
+				(payload, context) -> {
+					// OpenDialoguePayload just signals that dialogue is starting
+					// The actual node data comes via DialogueNodePayload immediately after
+				}
+		);
+
+		ClientPlayNetworking.registerGlobalReceiver(DialogueNodePayload.TYPE,
+				(payload, context) -> {
+					context.client().execute(() -> {
+						DialogueScreen.updateOrOpen(
+								context.client(),
+								payload.speakerName(),
+								payload.text(),
+								payload.optionLabels(),
+								payload.entityId(),
+								payload.hasMore()
+						);
+					});
 				}
 		);
 
