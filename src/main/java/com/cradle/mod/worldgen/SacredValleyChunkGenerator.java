@@ -158,8 +158,8 @@ public class SacredValleyChunkGenerator extends ChunkGenerator {
 	}
 
 	/**
-	 * Place a simple tree at the given position.
-	 * Mount Samara gets large dark oak trees; other zones get normal oaks.
+	 * Place a simple tree at the given position, constrained to the given chunk
+	 * to avoid cross-chunk setBlock errors.
 	 */
 	private void placeTree(WorldGenRegion region, BlockPos.MutableBlockPos pos,
 			int x, int baseY, int z, ValleyBiomePainter.Zone zone) {
@@ -167,6 +167,12 @@ public class SacredValleyChunkGenerator extends ChunkGenerator {
 		BlockState leaves = (zone == ValleyBiomePainter.Zone.MOUNT_SAMARA) ? DARK_OAK_LEAVES : OAK_LEAVES;
 		int trunkHeight = (zone == ValleyBiomePainter.Zone.MOUNT_SAMARA) ? 7 : 5;
 		int leafRadius = (zone == ValleyBiomePainter.Zone.MOUNT_SAMARA) ? 3 : 2;
+
+		// Don't place trees too close to chunk edges (leaves would cross boundary)
+		int localX = x & 15;
+		int localZ = z & 15;
+		if (localX < leafRadius || localX > 15 - leafRadius) return;
+		if (localZ < leafRadius || localZ > 15 - leafRadius) return;
 
 		// Place trunk
 		for (int y = 0; y < trunkHeight; y++) {
