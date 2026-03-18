@@ -36,6 +36,7 @@ import com.cradle.mod.ability.PlayerLoadout;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.story.GameModeManager;
 import com.cradle.mod.worldgen.SacredValleyChunkGenerator;
+import com.cradle.mod.worldgen.structure.StructureGenerator;
 import com.cradle.mod.worldgen.ValleyHeightmap;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -856,6 +857,9 @@ public class CradleMod implements ModInitializer {
 					if (root.contains("gameMode")) {
 						GameModeManager.readNbt(root);
 					}
+					if (root.contains("structuresPlaced")) {
+						StructureGenerator.readNbt(root);
+					}
 					LOGGER.info("Loaded Cradle player data for {} players (mode: {}).",
 							CradlePlayerData.getAll().size(), GameModeManager.getMode());
 				} catch (IOException e) {
@@ -864,15 +868,17 @@ public class CradleMod implements ModInitializer {
 			} else {
 				LOGGER.info("No existing Cradle player data found, starting fresh.");
 				GameModeManager.reset();
+				StructureGenerator.reset();
 			}
 		});
 
-		// Auto-detect Cradle mode from the overworld chunk generator
+		// Auto-detect Cradle mode and generate structures
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			ServerLevel overworld = server.overworld();
 			if (overworld.getChunkSource().getGenerator() instanceof SacredValleyChunkGenerator) {
 				GameModeManager.setMode(GameModeManager.CradleGameMode.CRADLE);
 				LOGGER.info("Detected Sacred Valley chunk generator — Cradle mode activated.");
+				StructureGenerator.generateIfNeeded(overworld);
 			}
 		});
 
@@ -886,6 +892,7 @@ public class CradleMod implements ModInitializer {
 			// Clear in-memory data so it doesn't carry over to the next world
 			CradlePlayerData.clearAll();
 			GameModeManager.reset();
+			StructureGenerator.reset();
 		});
 
 		// Cradle mode: lock weather to clear (Sacred Valley has mild climate)
@@ -1116,6 +1123,8 @@ public class CradleMod implements ModInitializer {
 			// Save game mode alongside player data
 			CompoundTag gameModeTag = GameModeManager.writeNbt();
 			root.putString("gameMode", gameModeTag.getStringOr("gameMode", "FREE"));
+			CompoundTag structTag = StructureGenerator.writeNbt();
+			root.putBoolean("structuresPlaced", structTag.getBooleanOr("structuresPlaced", false));
 			NbtIo.writeCompressed(root, dataFile);
 		} catch (IOException e) {
 			LOGGER.error("Failed to auto-save Cradle player data!", e);
