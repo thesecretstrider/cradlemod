@@ -43,3 +43,7 @@ replay_*.log
 
 .claude/projects/
 .claude/worktrees/
+
+# worktrees
+
+.worktrees/
