@@ -947,7 +947,8 @@ public class CradleMod implements ModInitializer {
 				GameModeManager.setMode(GameModeManager.CradleGameMode.CRADLE);
 				LOGGER.info("Detected Sacred Valley chunk generator — Cradle mode activated.");
 				DialogueLoader.loadAll();
-				StructureGenerator.generateIfNeeded(overworld);
+				// Structures disabled — user will build them in-game and import later
+				// StructureGenerator.generateIfNeeded(overworld);
 				NpcSpawnManager.spawnIfNeeded(overworld);
 			}
 		});

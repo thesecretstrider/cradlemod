@@ -18,6 +18,15 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.blending.Blender;
 
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.world.level.WorldGenLevel;
+import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
+import net.minecraft.world.level.levelgen.structure.StructureSet;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
+import net.minecraft.core.HolderLookup;
+
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -197,6 +206,22 @@ public class SacredValleyChunkGenerator extends ChunkGenerator {
 				}
 			}
 		}
+	}
+
+	// ── Disable vanilla structures and biome decoration ──────────────────
+
+	@Override
+	public void createStructures(RegistryAccess registryAccess,
+			ChunkGeneratorStructureState structureState, StructureManager structureManager,
+			ChunkAccess chunk, StructureTemplateManager templateManager,
+			ResourceKey<Level> dimension) {
+		// No-op — no vanilla structures in Sacred Valley
+	}
+
+	@Override
+	public void applyBiomeDecoration(WorldGenLevel level, ChunkAccess chunk,
+			StructureManager structureManager) {
+		// No-op — no vanilla biome features (villages, ores, etc.) in Sacred Valley
 	}
 
 	@Override
