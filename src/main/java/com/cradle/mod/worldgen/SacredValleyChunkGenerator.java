@@ -22,7 +22,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Custom chunk generator for Sacred Valley (Cradle mode).
- * Currently generates flat terrain at Y=64. Terrain shaping comes in Task 4.
+ * Generates a bowl-shaped valley with Mount Samara at center and mountain ring perimeter.
  */
 public class SacredValleyChunkGenerator extends ChunkGenerator {
 
@@ -31,7 +31,14 @@ public class SacredValleyChunkGenerator extends ChunkGenerator {
 					BiomeSource.CODEC.fieldOf("biome_source").forGetter(gen -> gen.biomeSource)
 			).apply(instance, SacredValleyChunkGenerator::new));
 
-	private static final int SURFACE_Y = 64;
+	private static final BlockState BEDROCK = Blocks.BEDROCK.defaultBlockState();
+	private static final BlockState STONE = Blocks.STONE.defaultBlockState();
+	private static final BlockState DIRT = Blocks.DIRT.defaultBlockState();
+	private static final BlockState GRASS = Blocks.GRASS_BLOCK.defaultBlockState();
+	private static final BlockState SNOW = Blocks.SNOW_BLOCK.defaultBlockState();
+	private static final BlockState GRAVEL = Blocks.GRAVEL.defaultBlockState();
+	private static final BlockState BARRIER = Blocks.BARRIER.defaultBlockState();
+	private static final BlockState AIR = Blocks.AIR.defaultBlockState();
 
 	public SacredValleyChunkGenerator(BiomeSource biomeSource) {
 		super(biomeSource);
@@ -50,18 +57,24 @@ public class SacredValleyChunkGenerator extends ChunkGenerator {
 		Heightmap oceanFloor = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.OCEAN_FLOOR_WG);
 		Heightmap worldSurface = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.WORLD_SURFACE_WG);
 
+		int chunkX = chunk.getPos().x;
+		int chunkZ = chunk.getPos().z;
 		int minY = chunk.getMinY();
 		int maxY = minY + chunk.getHeight();
 
-		for (int y = minY; y < maxY; y++) {
-			BlockState state = getBlockAtHeight(y);
-			if (state.isAir()) continue;
+		for (int localX = 0; localX < 16; localX++) {
+			for (int localZ = 0; localZ < 16; localZ++) {
+				int worldX = chunkX * 16 + localX;
+				int worldZ = chunkZ * 16 + localZ;
+				int surfaceY = ValleyHeightmap.getHeight(worldX, worldZ);
 
-			for (int x = 0; x < 16; x++) {
-				for (int z = 0; z < 16; z++) {
-					chunk.setBlockState(pos.set(x, y, z), state, 0);
-					oceanFloor.update(x, y, z, state);
-					worldSurface.update(x, y, z, state);
+				for (int y = minY; y < maxY; y++) {
+					BlockState state = getBlockAt(y, surfaceY, worldX, worldZ);
+					if (state.isAir()) continue;
+
+					chunk.setBlockState(pos.set(localX, y, localZ), state, 0);
+					oceanFloor.update(localX, y, localZ, state);
+					worldSurface.update(localX, y, localZ, state);
 				}
 			}
 		}
@@ -69,12 +82,25 @@ public class SacredValleyChunkGenerator extends ChunkGenerator {
 		return CompletableFuture.completedFuture(chunk);
 	}
 
-	private BlockState getBlockAtHeight(int y) {
-		if (y == -64) return Blocks.BEDROCK.defaultBlockState();
-		if (y < SURFACE_Y - 2) return Blocks.STONE.defaultBlockState();
-		if (y < SURFACE_Y) return Blocks.DIRT.defaultBlockState();
-		if (y == SURFACE_Y) return Blocks.GRASS_BLOCK.defaultBlockState();
-		return Blocks.AIR.defaultBlockState();
+	private BlockState getBlockAt(int y, int surfaceY, int worldX, int worldZ) {
+		if (y == -64) return BEDROCK;
+		if (y > surfaceY) {
+			// Barrier wall at mountain peaks (outer edge of the ring)
+			double dist = Math.sqrt(worldX * worldX + worldZ * worldZ);
+			if (dist >= ValleyHeightmap.VALLEY_RADIUS && y <= ValleyHeightmap.MOUNTAIN_PEAK_Y + 5) {
+				return BARRIER;
+			}
+			return AIR;
+		}
+		if (y == surfaceY) {
+			// Snow on mountain peaks
+			if (surfaceY > 150) return SNOW;
+			// Gravel on steep mountain slopes
+			if (surfaceY > 120) return GRAVEL;
+			return GRASS;
+		}
+		if (y >= surfaceY - 3) return DIRT;
+		return STONE;
 	}
 
 	@Override
@@ -102,7 +128,7 @@ public class SacredValleyChunkGenerator extends ChunkGenerator {
 
 	@Override
 	public int getSeaLevel() {
-		return -63; // Below the world — no oceans in Sacred Valley
+		return -63;
 	}
 
 	@Override
@@ -113,7 +139,7 @@ public class SacredValleyChunkGenerator extends ChunkGenerator {
 	@Override
 	public int getBaseHeight(int x, int z, Heightmap.Types heightmapType,
 			LevelHeightAccessor level, RandomState randomState) {
-		return SURFACE_Y + 1;
+		return ValleyHeightmap.getHeight(x, z) + 1;
 	}
 
 	@Override
@@ -121,9 +147,10 @@ public class SacredValleyChunkGenerator extends ChunkGenerator {
 			RandomState randomState) {
 		int minY = level.getMinY();
 		int height = level.getHeight();
+		int surfaceY = ValleyHeightmap.getHeight(x, z);
 		BlockState[] states = new BlockState[height];
 		for (int i = 0; i < height; i++) {
-			states[i] = getBlockAtHeight(minY + i);
+			states[i] = getBlockAt(minY + i, surfaceY, x, z);
 		}
 		return new NoiseColumn(minY, states);
 	}
@@ -131,5 +158,6 @@ public class SacredValleyChunkGenerator extends ChunkGenerator {
 	@Override
 	public void addDebugScreenInfo(List<String> info, RandomState randomState, BlockPos pos) {
 		info.add("Sacred Valley Generator");
+		info.add("Surface Y: " + ValleyHeightmap.getHeight(pos.getX(), pos.getZ()));
 	}
 }
