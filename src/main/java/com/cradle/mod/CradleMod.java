@@ -36,6 +36,7 @@ import com.cradle.mod.ability.PlayerLoadout;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.story.GameModeManager;
 import com.cradle.mod.worldgen.SacredValleyChunkGenerator;
+import com.cradle.mod.worldgen.ValleyHeightmap;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -156,7 +157,9 @@ public class CradleMod implements ModInitializer {
 			if (data.canFly()) {
 				CyclingManager.enableFlight(player, data);
 			}
+			// Cradle mode: teleport new players to Wei clan territory
 			if (GameModeManager.isCradleMode() && !data.hasChosenCharacter()) {
+				player.teleportTo(-300, ValleyHeightmap.getHeight(-300, -300) + 1, -300);
 				ServerPlayNetworking.send(player, new OpenCharacterSelectionPayload());
 			} else if (!data.hasChosenPath()) {
 				ServerPlayNetworking.send(player, new OpenPathSelectionPayload());
@@ -883,6 +886,16 @@ public class CradleMod implements ModInitializer {
 			// Clear in-memory data so it doesn't carry over to the next world
 			CradlePlayerData.clearAll();
 			GameModeManager.reset();
+		});
+
+		// Cradle mode: lock weather to clear (Sacred Valley has mild climate)
+		ServerTickEvents.END_SERVER_TICK.register(server -> {
+			if (GameModeManager.isCradleMode()) {
+				ServerLevel overworld = server.overworld();
+				if (overworld.isRaining() || overworld.isThundering()) {
+					overworld.setWeatherParameters(6000, 0, false, false);
+				}
+			}
 		});
 
 		// Register the cycling tick handler — runs every server tick (20x per second)
