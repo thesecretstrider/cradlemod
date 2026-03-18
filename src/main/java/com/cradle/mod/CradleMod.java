@@ -26,7 +26,9 @@ import com.cradle.mod.network.BranchAbilityPayload;
 import com.cradle.mod.network.ChooseAbilityPayload;
 import com.cradle.mod.network.AbilityLoadoutSyncPayload;
 import com.cradle.mod.network.ToggleCopperSightPayload;
+import com.cradle.mod.network.ChooseCharacterPayload;
 import com.cradle.mod.network.GoldsignBroadcastPayload;
+import com.cradle.mod.network.OpenCharacterSelectionPayload;
 import com.cradle.mod.ability.AbilityExecutor;
 import com.cradle.mod.ability.AbilityDefinition;
 import com.cradle.mod.ability.AbilityRegistry;
@@ -116,6 +118,7 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playS2C().register(DuelEndPayload.TYPE, DuelEndPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playS2C().register(AbilityLoadoutSyncPayload.TYPE, AbilityLoadoutSyncPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playS2C().register(GoldsignBroadcastPayload.TYPE, GoldsignBroadcastPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playS2C().register(OpenCharacterSelectionPayload.TYPE, OpenCharacterSelectionPayload.STREAM_CODEC);
 
 		// Register networking packets (client -> server)
 		PayloadTypeRegistry.playC2S().register(ChoosePathPayload.TYPE, ChoosePathPayload.STREAM_CODEC);
@@ -133,6 +136,7 @@ public class CradleMod implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(BranchAbilityPayload.TYPE, BranchAbilityPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(ChooseAbilityPayload.TYPE, ChooseAbilityPayload.STREAM_CODEC);
 		PayloadTypeRegistry.playC2S().register(ToggleCopperSightPayload.TYPE, ToggleCopperSightPayload.STREAM_CODEC);
+		PayloadTypeRegistry.playC2S().register(ChooseCharacterPayload.TYPE, ChooseCharacterPayload.STREAM_CODEC);
 
 		// Send initial data sync when a player joins, and open path selection if needed
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
@@ -144,7 +148,9 @@ public class CradleMod implements ModInitializer {
 			if (data.canFly()) {
 				CyclingManager.enableFlight(player, data);
 			}
-			if (!data.hasChosenPath()) {
+			if (GameModeManager.isCradleMode() && !data.hasChosenCharacter()) {
+				ServerPlayNetworking.send(player, new OpenCharacterSelectionPayload());
+			} else if (!data.hasChosenPath()) {
 				ServerPlayNetworking.send(player, new OpenPathSelectionPayload());
 			}
 			// Send all existing goldsigns to the joining player
@@ -210,6 +216,61 @@ public class CradleMod implements ModInitializer {
 			));
 			player.sendSystemMessage(Component.literal(
 					"\u00A76[Cradle] \u00A7a\u2694 Basic Enforcement unlocked! Press Z to activate."
+			));
+		});
+
+		// Handle character selection from the client (Cradle mode)
+		ServerPlayNetworking.registerGlobalReceiver(ChooseCharacterPayload.TYPE, (payload, context) -> {
+			ServerPlayer player = context.player();
+			CradlePlayerData data = CradlePlayerData.getOrCreate(player.getUUID());
+
+			// Validate: player hasn't already chosen a character
+			if (data.hasChosenCharacter()) {
+				return;
+			}
+
+			// Validate: character name is a real PlayerCharacter enum value and not NONE
+			GameModeManager.PlayerCharacter character;
+			try {
+				character = GameModeManager.PlayerCharacter.valueOf(payload.characterName());
+			} catch (IllegalArgumentException e) {
+				return;
+			}
+			if (character == GameModeManager.PlayerCharacter.NONE) {
+				return;
+			}
+
+			// Set the character
+			data.setChosenCharacter(character);
+
+			// Set path and stage based on character choice
+			switch (character) {
+				case LINDON -> {
+					data.setChosenPath(CradlePlayerData.Path.HOLLOW_KING); // Pure madra
+					data.setAdvancementStage(CradlePlayerData.AdvancementStage.FOUNDATION);
+				}
+				case YERIN -> {
+					data.setChosenPath(CradlePlayerData.Path.ENDLESS_SWORD);
+					data.setAdvancementStage(CradlePlayerData.AdvancementStage.COPPER);
+				}
+				default -> { return; }
+			}
+
+			// Mark path as chosen (bypasses PathSelectionScreen)
+			data.setChosenPath(data.getChosenPath()); // triggers hasChosenPath = true
+
+			// Auto-assign Basic Enforcement to slot 0
+			data.getLoadout().equipAbility(0, "basic_enforcement");
+
+			autoSave(player.level().getServer());
+			sync(player, data);
+			syncLoadout(player, data);
+
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A76You are \u00A7e" + (character == GameModeManager.PlayerCharacter.LINDON ? "Wei Shi Lindon" : "Yerin") + "\u00A76."
+			));
+			player.sendSystemMessage(Component.literal(
+					"\u00A76[Cradle] \u00A77Your journey in Sacred Valley begins."
 			));
 		});
 

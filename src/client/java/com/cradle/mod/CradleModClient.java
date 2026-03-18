@@ -2,6 +2,7 @@ package com.cradle.mod;
 
 import com.cradle.mod.network.CradleSyncPayload;
 import com.cradle.mod.network.GoldsignBroadcastPayload;
+import com.cradle.mod.network.OpenCharacterSelectionPayload;
 import com.cradle.mod.network.OpenInfoScreenPayload;
 import com.cradle.mod.network.OpenPathSelectionPayload;
 import com.cradle.mod.network.ToggleIronBodyPayload;
@@ -217,6 +218,15 @@ public class CradleModClient implements ClientModInitializer {
 						} else {
 							context.client().setScreen(new PathSelectionScreen());
 						}
+					});
+				}
+		);
+
+		// ── Networking: receive open-character-selection packet ──────
+		ClientPlayNetworking.registerGlobalReceiver(OpenCharacterSelectionPayload.TYPE,
+				(payload, context) -> {
+					context.client().execute(() -> {
+						context.client().setScreen(new CharacterSelectionScreen());
 					});
 				}
 		);
