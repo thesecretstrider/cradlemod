@@ -20,6 +20,7 @@ import com.cradle.mod.render.GoldsignFeatureRenderer;
 import com.cradle.mod.block.CradleBlocks;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.entity.RemnantRenderer;
+import com.cradle.mod.entity.StoryNpcRenderer;
 import com.cradle.mod.entity.StrikerProjectileRenderer;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
@@ -157,6 +158,7 @@ public class CradleModClient implements ClientModInitializer {
 		// ── Register entity renderers ────────────────────────────────
 		EntityRendererRegistry.register(CradleEntities.STRIKER_PROJECTILE, StrikerProjectileRenderer::new);
 		EntityRendererRegistry.register(CradleEntities.REMNANT, RemnantRenderer::new);
+		EntityRendererRegistry.register(CradleEntities.STORY_NPC, StoryNpcRenderer::new);
 
 		// ── Register goldsign feature renderer on player renderers ───
 		LivingEntityFeatureRendererRegistrationCallback.EVENT.register(
