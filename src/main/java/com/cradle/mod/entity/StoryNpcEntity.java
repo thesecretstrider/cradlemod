@@ -22,7 +22,10 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import com.cradle.mod.entity.ai.WaypointWanderGoal;
 import com.cradle.mod.network.OpenDialoguePayload;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Invulnerable, persistent NPC entity for story mode.
@@ -40,6 +43,8 @@ public class StoryNpcEntity extends PathfinderMob {
 			SynchedEntityData.defineId(StoryNpcEntity.class, EntityDataSerializers.STRING);
 	private static final EntityDataAccessor<String> FACTION =
 			SynchedEntityData.defineId(StoryNpcEntity.class, EntityDataSerializers.STRING);
+
+	private List<WaypointWanderGoal.WaypointEntry> waypoints = new ArrayList<>();
 
 	public StoryNpcEntity(EntityType<? extends StoryNpcEntity> type, Level level) {
 		super(type, level);
@@ -89,6 +94,13 @@ public class StoryNpcEntity extends PathfinderMob {
 
 	public String getFaction() { return this.entityData.get(FACTION); }
 	public void setFaction(String faction) { this.entityData.set(FACTION, faction); }
+
+	public void setWaypoints(List<WaypointWanderGoal.WaypointEntry> waypoints) {
+		this.waypoints = waypoints;
+		if (!waypoints.isEmpty()) {
+			this.goalSelector.addGoal(3, new WaypointWanderGoal(this, waypoints, 0.6));
+		}
+	}
 
 	// ── Interaction ────────────────────────────────────────────────
 

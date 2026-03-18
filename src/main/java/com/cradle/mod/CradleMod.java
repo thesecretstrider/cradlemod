@@ -36,6 +36,7 @@ import com.cradle.mod.ability.AbilityRegistry;
 import com.cradle.mod.ability.PlayerLoadout;
 import com.cradle.mod.entity.CradleEntities;
 import com.cradle.mod.story.GameModeManager;
+import com.cradle.mod.story.NpcSpawnManager;
 import com.cradle.mod.worldgen.SacredValleyChunkGenerator;
 import com.cradle.mod.worldgen.structure.StructureGenerator;
 import com.cradle.mod.worldgen.ValleyHeightmap;
@@ -862,6 +863,9 @@ public class CradleMod implements ModInitializer {
 					if (root.contains("structuresPlaced")) {
 						StructureGenerator.readNbt(root);
 					}
+					if (root.contains("npcsSpawned")) {
+						NpcSpawnManager.readNbt(root);
+					}
 					LOGGER.info("Loaded Cradle player data for {} players (mode: {}).",
 							CradlePlayerData.getAll().size(), GameModeManager.getMode());
 				} catch (IOException e) {
@@ -871,6 +875,7 @@ public class CradleMod implements ModInitializer {
 				LOGGER.info("No existing Cradle player data found, starting fresh.");
 				GameModeManager.reset();
 				StructureGenerator.reset();
+				NpcSpawnManager.reset();
 			}
 		});
 
@@ -881,6 +886,7 @@ public class CradleMod implements ModInitializer {
 				GameModeManager.setMode(GameModeManager.CradleGameMode.CRADLE);
 				LOGGER.info("Detected Sacred Valley chunk generator — Cradle mode activated.");
 				StructureGenerator.generateIfNeeded(overworld);
+				NpcSpawnManager.spawnIfNeeded(overworld);
 			}
 		});
 
@@ -895,6 +901,7 @@ public class CradleMod implements ModInitializer {
 			CradlePlayerData.clearAll();
 			GameModeManager.reset();
 			StructureGenerator.reset();
+			NpcSpawnManager.reset();
 		});
 
 		// Cradle mode: lock weather to clear (Sacred Valley has mild climate)
@@ -1127,6 +1134,7 @@ public class CradleMod implements ModInitializer {
 			root.putString("gameMode", gameModeTag.getStringOr("gameMode", "FREE"));
 			CompoundTag structTag = StructureGenerator.writeNbt();
 			root.putBoolean("structuresPlaced", structTag.getBooleanOr("structuresPlaced", false));
+			NpcSpawnManager.writeNbt(root);
 			NbtIo.writeCompressed(root, dataFile);
 		} catch (IOException e) {
 			LOGGER.error("Failed to auto-save Cradle player data!", e);
