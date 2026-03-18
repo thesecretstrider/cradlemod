@@ -32,6 +32,7 @@ import com.cradle.mod.ability.AbilityDefinition;
 import com.cradle.mod.ability.AbilityRegistry;
 import com.cradle.mod.ability.PlayerLoadout;
 import com.cradle.mod.entity.CradleEntities;
+import com.cradle.mod.story.GameModeManager;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerEntityCombatEvents;
@@ -780,12 +781,17 @@ public class CradleMod implements ModInitializer {
 				try {
 					CompoundTag root = NbtIo.readCompressed(dataFile, NbtAccounter.unlimitedHeap());
 					CradlePlayerData.loadAll(root);
-					LOGGER.info("Loaded Cradle player data for {} players.", CradlePlayerData.getAll().size());
+					if (root.contains("gameMode")) {
+						GameModeManager.readNbt(root);
+					}
+					LOGGER.info("Loaded Cradle player data for {} players (mode: {}).",
+							CradlePlayerData.getAll().size(), GameModeManager.getMode());
 				} catch (IOException e) {
 					LOGGER.error("Failed to load Cradle player data!", e);
 				}
 			} else {
 				LOGGER.info("No existing Cradle player data found, starting fresh.");
+				GameModeManager.reset();
 			}
 		});
 
@@ -798,6 +804,7 @@ public class CradleMod implements ModInitializer {
 			LOGGER.info("Saved Cradle player data for {} players on shutdown.", CradlePlayerData.getAll().size());
 			// Clear in-memory data so it doesn't carry over to the next world
 			CradlePlayerData.clearAll();
+			GameModeManager.reset();
 		});
 
 		// Register the cycling tick handler — runs every server tick (20x per second)
@@ -1014,7 +1021,11 @@ public class CradleMod implements ModInitializer {
 		if (CradlePlayerData.getAll().isEmpty()) return;
 		Path dataFile = server.getWorldPath(LevelResource.ROOT).resolve(DATA_FILE_NAME);
 		try {
-			NbtIo.writeCompressed(CradlePlayerData.saveAll(), dataFile);
+			CompoundTag root = CradlePlayerData.saveAll();
+			// Save game mode alongside player data
+			CompoundTag gameModeTag = GameModeManager.writeNbt();
+			root.putString("gameMode", gameModeTag.getStringOr("gameMode", "FREE"));
+			NbtIo.writeCompressed(root, dataFile);
 		} catch (IOException e) {
 			LOGGER.error("Failed to auto-save Cradle player data!", e);
 		}

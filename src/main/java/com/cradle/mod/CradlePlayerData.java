@@ -1,6 +1,7 @@
 package com.cradle.mod;
 
 import com.cradle.mod.ability.PlayerLoadout;
+import com.cradle.mod.story.GameModeManager.PlayerCharacter;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
@@ -298,6 +299,7 @@ public final class CradlePlayerData {
 	private boolean copperSightActive; // Toggle for Copper Sight aura particles (Copper+ only)
 	private Goldsign goldsign; // Goldsign from Remnant absorption at Gold
 	private int remnantDeathCount; // How many times player died and left a Remnant (scales Herald fight)
+	private PlayerCharacter chosenCharacter; // Story Mode: which character the player chose (Lindon/Yerin)
 
 	// Transient: charge multiplier for current striker fire (set by AbilityExecutor, not persisted)
 	private transient float currentChargeMultiplier = 1.0f;
@@ -336,6 +338,7 @@ public final class CradlePlayerData {
 		this.copperSightActive = false;
 		this.goldsign = Goldsign.NONE;
 		this.remnantDeathCount = 0;
+		this.chosenCharacter = PlayerCharacter.NONE;
 	}
 
 	// ── Getters / setters ──────────────────────────────────────────────
@@ -530,6 +533,10 @@ public final class CradlePlayerData {
 	public void setRemnantDeathCount(int count) { this.remnantDeathCount = Math.max(0, count); }
 	public void incrementRemnantDeathCount() { this.remnantDeathCount++; }
 
+	public PlayerCharacter getChosenCharacter() { return chosenCharacter; }
+	public void setChosenCharacter(PlayerCharacter character) { this.chosenCharacter = Objects.requireNonNull(character); }
+	public boolean hasChosenCharacter() { return chosenCharacter != PlayerCharacter.NONE; }
+
 	// Charge multiplier for striker charge-up system (transient, not persisted)
 	public float getCurrentChargeMultiplier() { return currentChargeMultiplier; }
 	public void setCurrentChargeMultiplier(float mult) { this.currentChargeMultiplier = mult; }
@@ -696,6 +703,7 @@ public final class CradlePlayerData {
 		tag.putBoolean("copperSightActive", copperSightActive);
 		tag.putString("goldsign", goldsign.name());
 		tag.putInt("remnantDeathCount", remnantDeathCount);
+		tag.putString("chosenCharacter", chosenCharacter.name());
 		return tag;
 	}
 
@@ -761,6 +769,12 @@ public final class CradlePlayerData {
 			data.goldsign = Goldsign.NONE;
 		}
 		data.remnantDeathCount = tag.getIntOr("remnantDeathCount", 0);
+
+		try {
+			data.chosenCharacter = PlayerCharacter.valueOf(tag.getStringOr("chosenCharacter", "NONE"));
+		} catch (IllegalArgumentException e) {
+			data.chosenCharacter = PlayerCharacter.NONE;
+		}
 
 		// Load or migrate ability loadout
 		if (tag.contains("loadout")) {
