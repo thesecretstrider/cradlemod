@@ -12,9 +12,9 @@
 
 ---
 
-## Phase 1: Game Mode Foundation
+## Phase 1: Game Mode Foundation ✅
 
-### Task 1: GameModeManager — Core Mode Tracking
+### Task 1: GameModeManager — Core Mode Tracking ✅
 
 **Files:**
 - Create: `src/main/java/com/cradle/mod/story/GameModeManager.java`
@@ -81,7 +81,7 @@ git commit -m "feat: add GameModeManager and character choice field"
 
 ---
 
-### Task 2: Character Selection Screen (Client)
+### Task 2: Character Selection Screen (Client) ✅
 
 **Files:**
 - Create: `src/client/java/com/cradle/mod/screen/CharacterSelectionScreen.java`
@@ -161,7 +161,7 @@ git commit -m "feat: character selection screen for Cradle Mode (Lindon/Yerin)"
 
 ---
 
-### Task 3: World Type Registration — Cradle Mode World
+### Task 3: World Type Registration — Cradle Mode World ✅
 
 **Files:**
 - Create: `src/main/java/com/cradle/mod/worldgen/SacredValleyChunkGenerator.java`
@@ -213,9 +213,9 @@ git commit -m "feat: register SacredValleyChunkGenerator (flat placeholder)"
 
 ---
 
-## Phase 2: Sacred Valley Terrain
+## Phase 2: Sacred Valley Terrain ✅
 
-### Task 4: Valley Heightmap — Bowl Shape with Mountain Ring
+### Task 4: Valley Heightmap — Bowl Shape with Mountain Ring ✅
 
 **Files:**
 - Modify: `src/main/java/com/cradle/mod/worldgen/SacredValleyChunkGenerator.java`
@@ -287,7 +287,7 @@ git commit -m "feat: Sacred Valley terrain — bowl shape, Mount Samara, mountai
 
 ---
 
-### Task 5: Biome Painting & Surface Decoration
+### Task 5: Biome Painting & Surface Decoration ✅
 
 **Files:**
 - Create: `src/main/java/com/cradle/mod/worldgen/ValleyBiomePainter.java`
@@ -325,7 +325,7 @@ git commit -m "feat: biome painting and surface decoration for Sacred Valley"
 
 ---
 
-### Task 6: Spawn Point & Day/Night Cycle
+### Task 6: Spawn Point & Day/Night Cycle ✅
 
 **Files:**
 - Modify: `src/main/java/com/cradle/mod/worldgen/SacredValleyChunkGenerator.java`
@@ -354,9 +354,9 @@ git commit -m "feat: set Sacred Valley spawn point at Wei clan territory"
 
 ---
 
-## Phase 3: Sacred Valley Structures
+## Phase 3: Sacred Valley Structures ⏸️ (structures disabled — user building manually in-game)
 
-### Task 7: Structure Generator Framework
+### Task 7: Structure Generator Framework ✅ *(code exists but disabled — user will build structures in-game and import later)*
 
 **Files:**
 - Create: `src/main/java/com/cradle/mod/worldgen/structure/StructureGenerator.java`
@@ -421,7 +421,7 @@ git commit -m "feat: structure generator framework with BuildingPlacer utilities
 
 ---
 
-### Task 8: Wei Clan Village (Fully Detailed)
+### Task 8: Wei Clan Village (Fully Detailed) ✅ *(code exists but disabled — user will rebuild in-game)*
 
 **Files:**
 - Create: `src/main/java/com/cradle/mod/worldgen/structure/WeiClanStructure.java`
@@ -454,7 +454,7 @@ git commit -m "feat: Wei clan village — main hall, training grounds, houses"
 
 ---
 
-### Task 9: Heaven's Glory School (Fully Detailed)
+### Task 9: Heaven's Glory School (Fully Detailed) ✅ *(code exists but disabled — user will rebuild in-game)*
 
 **Files:**
 - Create: `src/main/java/com/cradle/mod/worldgen/structure/HeavensGloryStructure.java`
@@ -487,7 +487,7 @@ git commit -m "feat: Heaven's Glory school — temple, vault, parkour trial"
 
 ---
 
-### Task 10: Mount Samara & Key Landmarks
+### Task 10: Mount Samara & Key Landmarks ✅ *(code exists but disabled — user will rebuild in-game)*
 
 **Files:**
 - Create: `src/main/java/com/cradle/mod/worldgen/structure/MountSamaraStructure.java`
@@ -543,9 +543,9 @@ git commit -m "feat: Mount Samara, Yerin's cave, all faction structures with ful
 
 ---
 
-## Phase 4: NPC Framework
+## Phase 4: NPC Framework ✅
 
-### Task 11: StoryNpcEntity — Base Class
+### Task 11: StoryNpcEntity — Base Class ✅
 
 **Files:**
 - Create: `src/main/java/com/cradle/mod/entity/StoryNpcEntity.java`
@@ -624,7 +624,7 @@ git commit -m "feat: StoryNpcEntity — invulnerable, persistent, right-click di
 
 ---
 
-### Task 12: NPC Renderer (Client)
+### Task 12: NPC Renderer (Client) ✅
 
 **Files:**
 - Create: `src/client/java/com/cradle/mod/entity/StoryNpcRenderer.java`
@@ -662,7 +662,7 @@ git commit -m "feat: StoryNpcRenderer — humanoid model with nametag"
 
 ---
 
-### Task 13: NPC Spawning & Waypoint AI
+### Task 13: NPC Spawning & Waypoint AI ✅
 
 **Files:**
 - Create: `src/main/java/com/cradle/mod/story/NpcSpawnManager.java`
@@ -728,7 +728,7 @@ git commit -m "feat: NPC spawning and waypoint wandering AI"
 
 ---
 
-### Task 14: Dialogue System — Data & Server
+### Task 14: Dialogue System — Data & Server ✅
 
 **Files:**
 - Create: `src/main/java/com/cradle/mod/story/dialogue/DialogueTree.java`
@@ -827,7 +827,7 @@ git commit -m "feat: dialogue system — JSON data model, loader, network payloa
 
 ---
 
-### Task 15: DialogueScreen (Client)
+### Task 15: DialogueScreen (Client) ✅
 
 **Files:**
 - Create: `src/client/java/com/cradle/mod/screen/DialogueScreen.java`
